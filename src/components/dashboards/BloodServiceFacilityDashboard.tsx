@@ -28,7 +28,7 @@ import { RoleMetricCard } from '../dashboard/RoleDashboardPrimitives';
 import { NetworkInventoryDashboardPanel } from '../dashboard/NetworkInventoryDashboardPanel';
 import { NearlyExpiringUnitsPanel } from '../dashboard/NearlyExpiringUnitsPanel';
 import { BLOOD_COMPONENTS, BLOOD_GROUPS, getComponentLabel } from '../../lib/bloodCatalog';
-import { getBloodComponentStockLevel } from '../../lib/bloodStockLevel';
+import { getBloodTypeStockLevel, isRedCellComponent } from '../../lib/bloodStockLevel';
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
 interface BloodServiceFacilityDashboardProps {
@@ -61,17 +61,17 @@ export const BloodServiceFacilityDashboard: React.FC<BloodServiceFacilityDashboa
  const localAvailableUnits = useMemo(() => localStationInventory.filter(unit => unit.status === 'Available'), [localStationInventory]);
  const crossmatchedUnitCount = useMemo(() => localStationInventory.filter(unit => unit.status === 'Crossmatched').length, [localStationInventory]);
  const criticalAvailability = useMemo(() => {
- return BLOOD_COMPONENTS.flatMap(component => BLOOD_GROUPS.map(bloodType => {
+ return BLOOD_COMPONENTS.filter(isRedCellComponent).flatMap(component => BLOOD_GROUPS.map(bloodType => {
  const count = localAvailableUnits.filter(unit => unit.component === component && unit.bloodType === bloodType).length;
- const level = getBloodComponentStockLevel(bloodType, component, count);
+ const level = getBloodTypeStockLevel(bloodType, count);
  return { bloodType, component, count, level };
  }))
- .filter(item => item.level !== 'stable')
+ .filter(item => item.level === 'critical' || item.level === 'low')
  .sort((left, right) => (left.level === 'critical' ? -1 : 1) - (right.level === 'critical' ? -1 : 1) || left.count - right.count)
  .slice(0, 6);
  }, [localAvailableUnits]);
- const criticalStockAlertCount = useMemo(() => BLOOD_COMPONENTS.flatMap(component => BLOOD_GROUPS.map(bloodType =>
- getBloodComponentStockLevel(bloodType, component, localAvailableUnits.filter(unit => unit.component === component && unit.bloodType === bloodType).length)
+ const criticalStockAlertCount = useMemo(() => BLOOD_COMPONENTS.filter(isRedCellComponent).flatMap(component => BLOOD_GROUPS.map(bloodType =>
+ getBloodTypeStockLevel(bloodType, localAvailableUnits.filter(unit => unit.component === component && unit.bloodType === bloodType).length)
  )).filter(level => level === 'critical').length, [localAvailableUnits]);
 
  const recentNetworkActivity = [...myRequisitions]
@@ -144,7 +144,7 @@ export const BloodServiceFacilityDashboard: React.FC<BloodServiceFacilityDashboa
  <RoleMetricCard label="Available units" value={localAvailableUnits.length} detail="Cleared and ready to issue" icon={Droplet} tone="positive" status="Ready" />
  <RoleMetricCard label="Crossmatched units" value={crossmatchedUnitCount} detail="Patient-held local inventory" icon={User} tone="neutral" status="Held" />
  <RoleMetricCard label="Orders in transit" value={myRequisitions.filter(r => r.status === 'In Transit').length} detail="Courier deliveries en route" icon={Clock} tone="attention" status="Track" />
- <RoleMetricCard label="Critical stock alerts" value={criticalStockAlertCount} detail="Blood group and component pairs" icon={AlertTriangle} tone={criticalStockAlertCount > 0 ? 'critical' : 'positive'} status={criticalStockAlertCount > 0 ? 'Review' : 'Stable'} />
+ <RoleMetricCard label="Critical stock alerts" value={criticalStockAlertCount} detail="Whole Blood and PRBC pairs" icon={AlertTriangle} tone={criticalStockAlertCount > 0 ? 'critical' : 'positive'} status={criticalStockAlertCount > 0 ? 'Review' : 'Stable'} />
  </div>
 
  <section className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900">
@@ -181,12 +181,12 @@ export const BloodServiceFacilityDashboard: React.FC<BloodServiceFacilityDashboa
  <div className="flex items-start justify-between gap-3">
  <div>
  <h3 className="text-sm font-bold text-white">Critical availability</h3>
- <p className="mt-1 text-xs leading-relaxed text-slate-400">Local available stock that needs attention before the next request.</p>
+ <p className="mt-1 text-xs leading-relaxed text-slate-400">Whole Blood and PRBC stock that needs attention before the next request.</p>
  </div>
  <AlertTriangle className="size-5 shrink-0 text-amber-400" />
  </div>
  <div className="mt-4 space-y-2">
- {criticalAvailability.length === 0 ? <p className="rounded-xl border border-emerald-900/70 bg-emerald-950/20 px-3 py-4 text-xs text-emerald-300">All available blood groups and components are at stable levels.</p> : criticalAvailability.map(item => <div key={`${item.bloodType}-${item.component}`} className="flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950 px-3 py-2.5"><div className="min-w-0"><p className="font-mono text-xs font-bold text-white">{item.bloodType} <span className="font-sans font-normal text-slate-400">{getComponentLabel(item.component)}</span></p><p className={`mt-1 text-[10px] font-bold uppercase tracking-wide ${item.level === 'critical' ? 'text-primary' : 'text-amber-400'}`}>{item.level === 'critical' ? 'Critical' : 'Low stock'}</p></div><span className={`font-mono text-lg font-black ${item.level === 'critical' ? 'text-primary' : 'text-amber-400'}`}>{formatNumber(item.count)}</span></div>)}
+ {criticalAvailability.length === 0 ? <p className="rounded-xl border border-emerald-900/70 bg-emerald-950/20 px-3 py-4 text-xs text-emerald-300">All monitored Whole Blood and PRBC groups are at stable levels.</p> : criticalAvailability.map(item => <div key={`${item.bloodType}-${item.component}`} className="flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950 px-3 py-2.5"><div className="min-w-0"><p className="font-mono text-xs font-bold text-white">{item.bloodType} <span className="font-sans font-normal text-slate-400">{getComponentLabel(item.component)}</span></p><p className={`mt-1 text-[10px] font-bold uppercase tracking-wide ${item.level === 'critical' ? 'text-primary' : 'text-amber-400'}`}>{item.level === 'critical' ? 'Critical' : 'Low stock'}</p></div><span className={`font-mono text-lg font-black ${item.level === 'critical' ? 'text-primary' : 'text-amber-400'}`}>{formatNumber(item.count)}</span></div>)}
  </div>
  </section>
 

@@ -1,26 +1,34 @@
 import type { BloodComponentType, BloodUnit, FullBloodType } from '../types/blood';
 
-export type BloodStockLevel = 'critical' | 'low' | 'stable';
+export type BloodStockLevel = 'critical' | 'low' | 'stable' | 'unclassified';
 
-const RED_CELL_COMPONENTS: BloodComponentType[] = [
+export const RED_CELL_COMPONENTS: BloodComponentType[] = [
   'Whole Blood',
   'Packed Red Blood Cells (PRBC)',
 ];
 
-const getComponentThresholdDivisor = (component: BloodComponentType) => {
-  if (RED_CELL_COMPONENTS.includes(component)) return 2;
-  if (component === 'Fresh Frozen Plasma (FFP)') return 3;
-  return 4;
+export const isRedCellComponent = (component: BloodComponentType) => RED_CELL_COMPONENTS.includes(component);
+
+export const getBloodTypeStockThresholds = (bloodType: FullBloodType) => {
+  const isAB = bloodType.startsWith('AB');
+
+  return {
+    criticalBelow: isAB ? 15 : 50,
+    lowFrom: isAB ? 20 : 50,
+    lowTo: isAB ? 24 : 50,
+    stableAt: isAB ? 25 : 51,
+  };
 };
 
-export const getBloodTypeStockLevel = (bloodType: FullBloodType, availableRedCellUnits: number): BloodStockLevel => {
-  const isAB = bloodType.startsWith('AB');
-  const criticalThreshold = isAB ? 15 : 50;
-  const stableThreshold = isAB ? 25 : 51;
+export const getBloodTypeStockLevel = (bloodType: FullBloodType, availableUnits: number): BloodStockLevel => {
+  const { criticalBelow, lowFrom, lowTo, stableAt } = getBloodTypeStockThresholds(bloodType);
 
-  if (availableRedCellUnits < criticalThreshold) return 'critical';
-  if (availableRedCellUnits < stableThreshold) return 'low';
-  return 'stable';
+  if (availableUnits < criticalBelow) return 'critical';
+  if (availableUnits >= lowFrom && availableUnits <= lowTo) return 'low';
+  if (availableUnits >= stableAt) return 'stable';
+
+  // Policy specifies no status for AB stock from 15 through 19 units.
+  return 'unclassified';
 };
 
 export const getAvailableRedCellUnits = (
@@ -30,12 +38,12 @@ export const getAvailableRedCellUnits = (
 ) => bloodUnits.filter(unit =>
   unit.currentLocation.facilityId === facilityId
   && unit.bloodType === bloodType
-  && RED_CELL_COMPONENTS.includes(unit.component)
+  && isRedCellComponent(unit.component)
   && unit.status === 'Available'
   && unit.testingStatus.overall === 'Passed'
 ).length;
 
-export const getAvailableComponentUnits = (
+export const getAvailableRedCellComponentUnits = (
   bloodUnits: BloodUnit[],
   bloodType: FullBloodType,
   component: BloodComponentType,
@@ -48,34 +56,18 @@ export const getAvailableComponentUnits = (
   && unit.testingStatus.overall === 'Passed'
 ).length;
 
-export const getBloodComponentStockLevel = (
-  bloodType: FullBloodType,
-  component: BloodComponentType,
-  availableUnits: number,
-): BloodStockLevel => {
-  const divisor = getComponentThresholdDivisor(component);
-  const isAB = bloodType.startsWith('AB');
-  const criticalThreshold = Math.ceil((isAB ? 15 : 50) / divisor);
-  const stableThreshold = Math.ceil((isAB ? 25 : 51) / divisor);
-
-  if (availableUnits < criticalThreshold) return 'critical';
-  if (availableUnits < stableThreshold) return 'low';
-  return 'stable';
-};
-
 export const getFacilityBloodTypeStockLevel = (
   bloodUnits: BloodUnit[],
   bloodType: FullBloodType,
   facilityId: string,
 ) => getBloodTypeStockLevel(bloodType, getAvailableRedCellUnits(bloodUnits, bloodType, facilityId));
 
-export const getFacilityBloodComponentStockLevel = (
+export const getFacilityRedCellComponentStockLevel = (
   bloodUnits: BloodUnit[],
   bloodType: FullBloodType,
   component: BloodComponentType,
   facilityId: string,
-) => getBloodComponentStockLevel(
+) => getBloodTypeStockLevel(
   bloodType,
-  component,
-  getAvailableComponentUnits(bloodUnits, bloodType, component, facilityId),
+  getAvailableRedCellComponentUnits(bloodUnits, bloodType, component, facilityId),
 );

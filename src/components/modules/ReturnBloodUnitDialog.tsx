@@ -3,9 +3,10 @@ import { RotateCcw } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useBloodData } from '../../context/BloodDataContext';
 import { BloodUnit } from '../../types/blood';
+import { RETURN_REASONS, ReturnReason } from '../../lib/bloodReturn';
 import { Button } from '../ui/button';
+import { Checkbox } from '../ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog';
-import { Textarea } from '../ui/textarea';
 
 interface ReturnBloodUnitDialogProps {
  unit: BloodUnit | null;
@@ -16,18 +17,22 @@ interface ReturnBloodUnitDialogProps {
 export const ReturnBloodUnitDialog: React.FC<ReturnBloodUnitDialogProps> = ({ unit, open, onOpenChange }) => {
  const { user } = useAuth();
  const { returnBloodUnit } = useBloodData();
- const [reason, setReason] = useState('');
+ const [reasons, setReasons] = useState<ReturnReason[]>([]);
 
  useEffect(() => {
- if (!open) setReason('');
+ if (!open) setReasons([]);
  }, [open]);
 
  if (!unit?.receivedFrom) return null;
 
+ const toggleReason = (reason: ReturnReason, checked: boolean) => {
+ setReasons(current => checked ? [...current, reason] : current.filter(item => item !== reason));
+ };
+
  const origin = unit.receivedFrom;
  const submitReturn = () => {
- if (!user || !reason.trim()) return;
- const returned = returnBloodUnit(unit.id, user.facilityCode, user.facilityName, reason);
+ if (!user || reasons.length === 0) return;
+ const returned = returnBloodUnit(unit.id, user.facilityCode, user.facilityName, reasons);
  if (returned) onOpenChange(false);
  };
 
@@ -51,22 +56,22 @@ export const ReturnBloodUnitDialog: React.FC<ReturnBloodUnitDialogProps> = ({ un
  <p className="mt-1 font-semibold">{origin.facilityName}</p>
  <p className="mt-1 text-xs text-muted-foreground">Original request: {origin.requisitionId}</p>
  </div>
- <label htmlFor="return-reason" className="flex w-full min-w-0 flex-col gap-2 text-sm font-medium">
- Return reason
- <Textarea
- id="return-reason"
- value={reason}
- onChange={event => setReason(event.target.value)}
- placeholder="Explain why this unit is being returned"
- aria-invalid={!reason.trim()}
- className="min-w-0"
- />
- </label>
+ <fieldset className="flex min-w-0 flex-col gap-2" aria-invalid={reasons.length === 0}>
+ <legend className="text-sm font-medium">Return reason</legend>
+ <p className="text-xs text-muted-foreground">Select all applicable reasons.</p>
+ {RETURN_REASONS.map(reason => {
+ const id = `return-reason-${reason.replace(/[^a-z]+/gi, '-').toLowerCase()}`;
+ return <label key={reason} htmlFor={id} className="flex cursor-pointer items-start gap-3 rounded-md border p-3 text-sm font-medium transition-colors hover:bg-muted/50">
+ <Checkbox id={id} checked={reasons.includes(reason)} onCheckedChange={checked => toggleReason(reason, checked === true)} />
+ <span>{reason}</span>
+ </label>;
+ })}
+ </fieldset>
  </div>
 
  <DialogFooter className="min-w-0 sm:flex-wrap">
  <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
- <Button type="button" variant="destructive" disabled={!reason.trim()} onClick={submitReturn}>
+ <Button type="button" variant="destructive" disabled={reasons.length === 0} onClick={submitReturn}>
  <RotateCcw data-icon="inline-start" />
  Confirm return
  </Button>

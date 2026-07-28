@@ -4,7 +4,7 @@ import { Activity, Building2, HeartPulse, Landmark, Wifi } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useBloodData } from '../../context/BloodDataContext';
 import { BLOOD_COMPONENTS, BLOOD_GROUPS, getComponentLabel } from '../../lib/bloodCatalog';
-import { getBloodComponentStockLevel } from '../../lib/bloodStockLevel';
+import { getBloodTypeStockLevel, isRedCellComponent } from '../../lib/bloodStockLevel';
 import { formatNumber } from '../../lib/utils';
 import { BloodComponentType, UserRole } from '../../types/blood';
 
@@ -28,6 +28,7 @@ const stockLevelClass = {
  critical: 'text-primary',
  low: 'text-amber-400',
  stable: 'text-emerald-400',
+ unclassified: 'text-slate-400',
 } as const;
 
 export const NetworkInventoryDashboardPanel: React.FC = () => {
@@ -79,10 +80,7 @@ export const NetworkInventoryDashboardPanel: React.FC = () => {
  </div>
 
  <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-slate-800 bg-slate-950/60 px-5 py-2.5 text-[10px] font-medium">
- <span className="text-slate-500">Per-facility stock status</span>
- <span className="inline-flex items-center gap-1.5 text-primary"><span className="size-1.5 rounded-full bg-primary" />Critical</span>
- <span className="inline-flex items-center gap-1.5 text-amber-400"><span className="size-1.5 rounded-full bg-amber-400" />Low</span>
- <span className="inline-flex items-center gap-1.5 text-emerald-400"><span className="size-1.5 rounded-full bg-emerald-400" />Stable</span>
+ {isRedCellComponent(component) ? <><span className="text-slate-500">Per-facility policy status</span><span className="inline-flex items-center gap-1.5 text-primary"><span className="size-1.5 rounded-full bg-primary" />Critical</span><span className="inline-flex items-center gap-1.5 text-amber-400"><span className="size-1.5 rounded-full bg-amber-400" />Low</span><span className="inline-flex items-center gap-1.5 text-emerald-400"><span className="size-1.5 rounded-full bg-emerald-400" />Stable</span></> : <span className="text-slate-500">Available unit counts only. No policy status is defined for {getComponentLabel(component)}.</span>}
  </div>
 
  <div className="overflow-x-auto">
@@ -93,8 +91,8 @@ export const NetworkInventoryDashboardPanel: React.FC = () => {
  const Icon = roleIcon[facility.role];
  return <tr key={facility.id} className="transition-colors hover:bg-slate-800/40"><td className="px-5 py-3.5"><span className="inline-flex items-center gap-2 font-semibold text-white"><Icon className="size-4 text-cyan-300" />{facility.name}</span></td>{BLOOD_GROUPS.map(group => {
  const count = facility.stockByBloodGroup[group] || 0;
- const stockLevel = getBloodComponentStockLevel(group, component, count);
- return <td key={group} title={`${group}: ${formatNumber(count)} ${stockLevel} ${getComponentLabel(component)} stock`} className={`px-2 py-3.5 text-center font-mono font-bold ${stockLevelClass[stockLevel]}`}>{formatNumber(count)}</td>;
+ const stockLevel = isRedCellComponent(component) ? getBloodTypeStockLevel(group, count) : null;
+ return <td key={group} title={stockLevel ? `${group}: ${formatNumber(count)} ${stockLevel} ${getComponentLabel(component)} stock` : `${group}: ${formatNumber(count)} available ${getComponentLabel(component)} units. No policy status applies.`} className={`px-2 py-3.5 text-center font-mono font-bold ${stockLevel ? stockLevelClass[stockLevel] : 'text-slate-300'}`}>{formatNumber(count)}</td>;
  })}<td className="px-5 py-3.5 text-right font-mono font-bold text-emerald-400">{formatNumber(facility.total)}</td></tr>;
  })}
  {availability.length === 0 && <tr><td colSpan={10} className="px-5 py-8 text-center text-slate-500">No other facility currently reports cleared, available {getComponentLabel(component)} stock.</td></tr>}

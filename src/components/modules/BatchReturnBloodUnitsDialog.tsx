@@ -3,10 +3,11 @@ import { Plus, RotateCcw, Search, X } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useBloodData } from '../../context/BloodDataContext';
 import { BloodUnit } from '../../types/blood';
+import { RETURN_REASONS, ReturnReason } from '../../lib/bloodReturn';
 import { Button } from '../ui/button';
+import { Checkbox } from '../ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog';
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '../ui/input-group';
-import { Textarea } from '../ui/textarea';
 import { formatNumber } from '../../lib/utils';
 
 interface BatchReturnBloodUnitsDialogProps {
@@ -20,7 +21,7 @@ export const BatchReturnBloodUnitsDialog: React.FC<BatchReturnBloodUnitsDialogPr
  const { returnBloodUnits } = useBloodData();
  const [serialQuery, setSerialQuery] = useState('');
  const [queuedIds, setQueuedIds] = useState<string[]>([]);
- const [reason, setReason] = useState('');
+ const [reasons, setReasons] = useState<ReturnReason[]>([]);
  const [queueError, setQueueError] = useState('');
 
  const queuedUnits = useMemo(() => eligibleUnits.filter(unit => queuedIds.includes(unit.id)), [eligibleUnits, queuedIds]);
@@ -35,7 +36,7 @@ export const BatchReturnBloodUnitsDialog: React.FC<BatchReturnBloodUnitsDialogPr
  if (!open) {
  setSerialQuery('');
  setQueuedIds([]);
- setReason('');
+ setReasons([]);
  setQueueError('');
  }
  }, [open]);
@@ -61,9 +62,13 @@ export const BatchReturnBloodUnitsDialog: React.FC<BatchReturnBloodUnitsDialogPr
  addUnit(unit);
  };
 
+ const toggleReason = (reason: ReturnReason, checked: boolean) => {
+ setReasons(current => checked ? [...current, reason] : current.filter(item => item !== reason));
+ };
+
  const submitBatch = () => {
- if (!user || !origin || !reason.trim()) return;
- if (returnBloodUnits(queuedIds, user.facilityCode, user.facilityName, reason)) onOpenChange(false);
+ if (!user || !origin || reasons.length === 0) return;
+ if (returnBloodUnits(queuedIds, user.facilityCode, user.facilityName, reasons)) onOpenChange(false);
  };
 
  return (
@@ -104,14 +109,22 @@ export const BatchReturnBloodUnitsDialog: React.FC<BatchReturnBloodUnitsDialogPr
  </div>
  </div>
 
- <label htmlFor="batch-return-reason" className="flex flex-col gap-2 text-sm font-medium">Return reason
- <Textarea id="batch-return-reason" value={reason} onChange={event => setReason(event.target.value)} placeholder="Explain why these units are being returned" aria-invalid={queuedUnits.length > 0 && !reason.trim()} />
- </label>
+ <fieldset className="flex flex-col gap-2" aria-invalid={queuedUnits.length > 0 && reasons.length === 0}>
+ <legend className="text-sm font-medium">Return reason</legend>
+ <p className="text-xs text-muted-foreground">Select all applicable reasons.</p>
+ {RETURN_REASONS.map(reason => {
+ const id = `batch-return-reason-${reason.replace(/[^a-z]+/gi, '-').toLowerCase()}`;
+ return <label key={reason} htmlFor={id} className="flex cursor-pointer items-start gap-3 rounded-md border p-3 text-sm font-medium transition-colors hover:bg-muted/50">
+ <Checkbox id={id} checked={reasons.includes(reason)} onCheckedChange={checked => toggleReason(reason, checked === true)} />
+ <span>{reason}</span>
+ </label>;
+ })}
+ </fieldset>
  </div>
 
  <DialogFooter>
  <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
- <Button type="button" variant="destructive" disabled={!origin || !reason.trim()} onClick={submitBatch}><RotateCcw data-icon="inline-start" /> Return {queuedUnits.length ? formatNumber(queuedUnits.length) : ''} unit{queuedUnits.length === 1 ? '' : 's'}</Button>
+ <Button type="button" variant="destructive" disabled={!origin || reasons.length === 0} onClick={submitBatch}><RotateCcw data-icon="inline-start" /> Return {queuedUnits.length ? formatNumber(queuedUnits.length) : ''} unit{queuedUnits.length === 1 ? '' : 's'}</Button>
  </DialogFooter>
  </DialogContent>
  </Dialog>

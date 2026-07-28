@@ -44,7 +44,7 @@ const COMPONENT_SPECS: {
  shortName: 'PRBC',
  defaultVolume: 250,
  storageTemp: '2°C to 6°C',
- shelfLife: '35 - 42 Days',
+ shelfLife: '35 Days (CPDA-1)',
  icon: '🩸',
  color: 'border-primary/40 bg-primary/20 text-primary'
  },
@@ -53,7 +53,7 @@ const COMPONENT_SPECS: {
  shortName: 'FFP',
  defaultVolume: 200,
  storageTemp: '-18°C or colder',
- shelfLife: '1 Year',
+ shelfLife: 'Not defined by policy',
  icon: '🧪',
  color: 'border-amber-500/40 bg-amber-950/20 text-amber-300'
  },
@@ -62,7 +62,7 @@ const COMPONENT_SPECS: {
  shortName: 'Platelets',
  defaultVolume: 60,
  storageTemp: '20°C to 24°C (Agitated)',
- shelfLife: '5 Days',
+ shelfLife: '5 Days (CPDA-1)',
  icon: '🟡',
  color: 'border-yellow-500/40 bg-yellow-950/20 text-yellow-300'
  },
@@ -71,7 +71,7 @@ const COMPONENT_SPECS: {
  shortName: 'Cryo',
  defaultVolume: 15,
  storageTemp: '-18°C or colder',
- shelfLife: '1 Year',
+ shelfLife: 'Not defined by policy',
  icon: '❄️',
  color: 'border-cyan-500/40 bg-cyan-950/20 text-cyan-300'
  },
@@ -80,7 +80,7 @@ const COMPONENT_SPECS: {
  shortName: 'Whole Blood',
  defaultVolume: 450,
  storageTemp: '2°C to 6°C',
- shelfLife: '35 Days',
+ shelfLife: 'Not defined by policy',
  icon: '🩸',
  color: 'border-slate-500/40 bg-slate-900 text-slate-300'
  }

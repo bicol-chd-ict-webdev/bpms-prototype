@@ -1,16 +1,16 @@
 import { BloodComponentType } from '../types/blood';
 
-const SHELF_LIFE_DAYS: Record<BloodComponentType, number> = {
-  'Whole Blood': 35,
-  'Packed Red Blood Cells (PRBC)': 42,
-  'Fresh Frozen Plasma (FFP)': 365,
+const SHELF_LIFE_DAYS: Partial<Record<BloodComponentType, number>> = {
+  'Packed Red Blood Cells (PRBC)': 35,
   'Platelet Concentrate': 5,
-  'Cryoprecipitate': 365,
 };
 
+export const getShelfLifeDays = (component: BloodComponentType) => SHELF_LIFE_DAYS[component] ?? null;
+
 /**
- * Calculates a unit's expiry after its component and test result have been
- * recorded. The shelf life itself is always measured from collection date.
+ * Calculates expiry only where the supplied CPDA-1 policy defines shelf life.
+ * The day after collection is Day 1, so the expiry date is collection date plus
+ * the policy shelf-life day count.
  */
 export const calculateExpiryFromCollectionDate = (
   component: BloodComponentType,
@@ -20,6 +20,9 @@ export const calculateExpiryFromCollectionDate = (
 
   if (Number.isNaN(collection.getTime())) return '';
 
-  collection.setUTCDate(collection.getUTCDate() + SHELF_LIFE_DAYS[component]);
+  const shelfLifeDays = getShelfLifeDays(component);
+  if (shelfLifeDays === null) return '';
+
+  collection.setUTCDate(collection.getUTCDate() + shelfLifeDays);
   return collection.toISOString().slice(0, 10);
 };

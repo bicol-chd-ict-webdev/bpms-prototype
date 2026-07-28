@@ -17,9 +17,9 @@ import {
  INITIAL_TRANSFUSION_LOGS, 
  INITIAL_NOTIFICATIONS 
 } from '../data/mockData';
-import { getFacilityBloodComponentStockLevel, getFacilityBloodTypeStockLevel } from '../lib/bloodStockLevel';
 import { prioritizeUnitsForRelease } from '../lib/bloodRelease';
 import { calculateExpiryFromCollectionDate } from '../lib/bloodExpiry';
+import { formatReturnReasons, hasValidReturnReasons, ReturnReason } from '../lib/bloodReturn';
 import { toast } from 'sonner';
 
 interface BloodDataContextType {
@@ -32,8 +32,8 @@ interface BloodDataContextType {
  addRequisition: (req: Omit<RequisitionOrder, 'id' | 'requestedAt' | 'status'>) => boolean;
  updateRequisitionStatus: (id: string, status: RequisitionStatus, notes?: string, allocatedUnitIds?: string[], quantityProvided?: number, updatedItems?: { id: string; quantityProvided?: number; allocatedUnitIds: string[] }[]) => void;
  receiveBloodRequest: (reqId: string) => void;
- returnBloodUnit: (unitId: string, returningFacilityId: string, returningFacilityName: string, reason: string) => boolean;
- returnBloodUnits: (unitIds: string[], returningFacilityId: string, returningFacilityName: string, reason: string) => boolean;
+ returnBloodUnit: (unitId: string, returningFacilityId: string, returningFacilityName: string, reasons: ReturnReason[]) => boolean;
+ returnBloodUnits: (unitIds: string[], returningFacilityId: string, returningFacilityName: string, reasons: ReturnReason[]) => boolean;
  addBloodUnit: (unit: Omit<BloodUnit, 'id'>) => void;
  addBatchBloodUnits: (units: BloodUnit[]) => void;
  updateUnitStatus: (id: string, status: UnitStatus, locationNotes?: string, suppressToast?: boolean) => void;
@@ -75,25 +75,6 @@ export const BloodDataProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
  const addRequisition = (reqData: Omit<RequisitionOrder, 'id' | 'requestedAt' | 'status'>) => {
  const targetReportsInventory = bloodUnits.some(unit => unit.currentLocation.facilityId === reqData.targetFacilityId);
- const requestedItems = reqData.items.length > 0
- ? reqData.items
- : reqData.requiredBloodType
- ? [{ requiredBloodType: reqData.requiredBloodType }]
- : [];
-
- if (targetReportsInventory && requestedItems.some(item =>
- item.requiredComponent
- ? getFacilityBloodComponentStockLevel(
- bloodUnits,
- item.requiredBloodType,
- item.requiredComponent,
- reqData.targetFacilityId,
- ) === 'critical'
- : getFacilityBloodTypeStockLevel(bloodUnits, item.requiredBloodType, reqData.targetFacilityId) === 'critical'
- )) {
- return false;
- }
-
  // Select and reserve the exact units when a networked facility receives a
  // request. Reserved units are no longer counted as available by any facility.
  const reservationIdsByItem = new Map<string, string[]>();
@@ -110,7 +91,12 @@ export const BloodDataProvider: React.FC<{ children: React.ReactNode }> = ({ chi
  )).slice(0, item.quantityRequested);
 
  // Stock may have changed after the request form was opened.
- if (unitsToReserve.length < item.quantityRequested) return false;
+ if (unitsToReserve.length < item.quantityRequested) {
+ toast.error('Request could not be submitted', {
+ description: 'Available inventory changed before this request was submitted. Review the selected quantities and try again.',
+ });
+ return false;
+ }
  reservationIdsByItem.set(item.id, unitsToReserve.map(unit => unit.id));
  unitsToReserve.forEach(unit => claimedUnitIds.add(unit.id));
  }
@@ -308,7 +294,7 @@ export const BloodDataProvider: React.FC<{ children: React.ReactNode }> = ({ chi
  volumeMl: item.requiredComponent === 'Whole Blood' ? 450 : 280,
  status: 'Available',
  donationDate: new Date().toISOString().split('T')[0],
- expiryDate: new Date(Date.now() + 35 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+ expiryDate: calculateExpiryFromCollectionDate(item.requiredComponent, new Date().toISOString().split('T')[0]),
  testingStatus: {
  hiv: 'Negative', hbv: 'Negative', hcv: 'Negative',
  syphilis: 'Negative', malaria: 'Negative', overall: 'Passed'
@@ -352,7 +338,7 @@ export const BloodDataProvider: React.FC<{ children: React.ReactNode }> = ({ chi
  setNotifications(prev => [recvNotif, ...prev]);
  };
 
- const returnBloodUnits = (unitIds: string[], returningFacilityId: string, returningFacilityName: string, reason: string) => {
+ const returnBloodUnits = (unitIds: string[], returningFacilityId: string, returningFacilityName: string, reasons: ReturnReason[]) => {
  const units = bloodUnits.filter(item => unitIds.includes(item.id));
  const origin = units[0]?.receivedFrom;
  const canReturn = Boolean(
@@ -364,12 +350,13 @@ export const BloodDataProvider: React.FC<{ children: React.ReactNode }> = ({ chi
  unit.currentLocation.facilityId === returningFacilityId &&
  ['Available', 'Uncrossmatched'].includes(unit.status)
  ) &&
- reason.trim()
+ hasValidReturnReasons(reasons)
  );
 
  if (!origin || !canReturn) return false;
 
  const returnedAt = new Date().toISOString().replace('T', ' ').substring(0, 16);
+ const reason = formatReturnReasons(reasons);
  setBloodUnits(previous => previous.map(item => unitIds.includes(item.id) ? {
  ...item,
  status: 'Available',
@@ -404,8 +391,8 @@ export const BloodDataProvider: React.FC<{ children: React.ReactNode }> = ({ chi
  return true;
  };
 
- const returnBloodUnit = (unitId: string, returningFacilityId: string, returningFacilityName: string, reason: string) =>
- returnBloodUnits([unitId], returningFacilityId, returningFacilityName, reason);
+ const returnBloodUnit = (unitId: string, returningFacilityId: string, returningFacilityName: string, reasons: ReturnReason[]) =>
+ returnBloodUnits([unitId], returningFacilityId, returningFacilityName, reasons);
 
  const addBloodUnit = (unitData: Omit<BloodUnit, 'id'>) => {
  const newUnit: BloodUnit = {

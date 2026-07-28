@@ -5,7 +5,7 @@ import { useBloodData } from '../../context/BloodDataContext';
 import { RHLN_FACILITY_DATA_SOURCE, RHLN_FACILITIES } from '../../data/rhlnFacilityDirectory';
 import { DEMO_USERS } from '../../data/mockData';
 import { BloodComponentType, FullBloodType, RequisitionItem, UserRole } from '../../types/blood';
-import { getBloodComponentStockLevel } from '../../lib/bloodStockLevel';
+import { getBloodTypeStockLevel, isRedCellComponent } from '../../lib/bloodStockLevel';
 import { Input } from '../ui/input';
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Button } from '../ui/button';
@@ -78,10 +78,10 @@ const providerCoordinatesLabel = (provider: Provider) => (
 );
 const providerLocationLabel = (provider: Provider) => [provider.province, providerCoordinatesLabel(provider)].filter(Boolean).join(' · ');
 const providerTypeLabel = (provider: Provider) => provider.inventoryReported ? ROLE_DETAILS[provider.role].label : 'Directory facility';
-const providerBloodComponentStockLevel = (provider: Provider, bloodType: FullBloodType, component: BloodComponentType) => getBloodComponentStockLevel(
- bloodType,
- component,
- provider.inventoryByProduct[productKey(bloodType, component)] || 0,
+const providerBloodComponentStockLevel = (provider: Provider, bloodType: FullBloodType, component: BloodComponentType) => (
+ isRedCellComponent(component)
+ ? getBloodTypeStockLevel(bloodType, provider.inventoryByProduct[productKey(bloodType, component)] || 0)
+ : null
 );
 const providerCanReceiveRequest = (provider: Provider, items: RequestItem[]) => !provider.inventoryReported || items.every(item => {
  const availableUnits = provider.inventoryByProduct[productKey(item.bloodType, item.component)] || 0;

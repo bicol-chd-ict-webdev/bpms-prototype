@@ -26,7 +26,8 @@ import { BulkInventoryModal } from './BulkInventoryModal';
 import { useAuth } from '../../context/AuthContext';
 import { BLOOD_COMPONENTS, BLOOD_GROUPS, getComponentLabel } from '../../lib/bloodCatalog';
 import { getInventoryStatusOptions, getReactiveMarkers, isAvailableInventoryUnit } from '../../lib/inventory';
-import { getBloodTypeStockLevel } from '../../lib/bloodStockLevel';
+import { getBloodTypeStockLevel, getBloodTypeStockThresholds, isRedCellComponent } from '../../lib/bloodStockLevel';
+import { daysUntilExpiry } from '../../lib/bloodRelease';
 import { useInventoryTable } from '../../hooks/useInventoryTable';
 import { InputGroup, InputGroupAddon, InputGroupInput } from '../ui/input-group';
 import { Button } from '../ui/button';
@@ -38,6 +39,31 @@ interface BloodInventoryMatrixProps {
  onOpenAddUnit?: () => void;
  facilityScoped?: boolean;
 }
+
+const formatExpiryDate = (expiryDate: string) => {
+ if (!expiryDate) return 'Not policy-defined';
+
+ const date = new Date(`${expiryDate}T00:00:00Z`);
+ if (Number.isNaN(date.getTime())) return 'Not available';
+
+ return new Intl.DateTimeFormat('en-US', {
+ month: 'short',
+ day: 'numeric',
+ year: 'numeric',
+ timeZone: 'UTC',
+ }).format(date);
+};
+
+const getExpiryLabel = (expiryDate: string) => {
+ if (!expiryDate) return 'No shelf-life policy supplied';
+
+ const daysLeft = daysUntilExpiry(expiryDate);
+
+ if (daysLeft < 0) return 'Expired';
+ if (daysLeft === 0) return 'Expires today';
+ if (daysLeft === 1) return '1 day left';
+ return `${daysLeft} days left`;
+};
 
 export const BloodInventoryMatrix: React.FC<BloodInventoryMatrixProps> = ({ onOpenAddUnit, facilityScoped = false }) => {
  const { currentRole, user } = useAuth();
@@ -244,9 +270,9 @@ export const BloodInventoryMatrix: React.FC<BloodInventoryMatrixProps> = ({ onOp
  {isInventoryHolder ? 'Available Stock Matrix' : 'Non-Reactive Available Stock Matrix'}
  </span>
  <span className="text-[11px] text-slate-500">
- {isInventoryHolder
- ? 'Only units with the Available status appear here. Uncrossmatched and crossmatched units are tracked separately.'
- : 'Only Non-Reactive tested units are added to available stock'}
+ {selectedComponent === 'ALL' || isRedCellComponent(selectedComponent)
+ ? 'Whole Blood and PRBC use their own selected-component thresholds.'
+ : `No red, yellow, or green threshold is defined for ${getComponentLabel(selectedComponent)}.`}
  </span>
  </div>
 
@@ -255,17 +281,26 @@ export const BloodInventoryMatrix: React.FC<BloodInventoryMatrixProps> = ({ onOp
  const { total: count, wholeBlood: wbUnitsCount, prbc: prbcUnitsCount } = matrixCounts[group];
 
  const wbPrbcCount = wbUnitsCount + prbcUnitsCount;
- const statusLevel = getBloodTypeStockLevel(group, wbPrbcCount);
+ const hasPolicyThreshold = selectedComponent === 'ALL' || isRedCellComponent(selectedComponent);
+ const policyCount = selectedComponent === 'ALL' ? wbPrbcCount : count;
+ const statusLevel = hasPolicyThreshold ? getBloodTypeStockLevel(group, policyCount) : null;
+ const { stableAt } = getBloodTypeStockThresholds(group);
  let statusLabel: string;
  let statusColor: string;
- const statusProgress = Math.min(100, Math.round((wbPrbcCount / (group.startsWith('AB') ? 25 : 50)) * 100));
+ const statusProgress = hasPolicyThreshold ? Math.min(100, Math.round((policyCount / stableAt) * 100)) : 0;
 
- if (statusLevel === 'critical') {
+ if (!hasPolicyThreshold) {
+ statusLabel = 'No policy';
+ statusColor = 'text-slate-400';
+ } else if (statusLevel === 'critical') {
  statusLabel = 'Critical';
  statusColor = 'text-primary';
  } else if (statusLevel === 'low') {
  statusLabel = 'Low Stock';
  statusColor = 'text-amber-400';
+ } else if (statusLevel === 'unclassified') {
+ statusLabel = 'Policy gap';
+ statusColor = 'text-slate-400';
  } else {
  statusLabel = 'Stable';
  statusColor = 'text-emerald-400';
@@ -273,14 +308,14 @@ export const BloodInventoryMatrix: React.FC<BloodInventoryMatrixProps> = ({ onOp
 
  const isSelected = selectedType === group;
  const barBgColor = 
- statusLevel === 'critical' ? 'bg-primary' :
- statusLevel === 'low' ? 'bg-amber-500' : 'bg-emerald-500';
+ !hasPolicyThreshold ? 'bg-slate-600' : statusLevel === 'critical' ? 'bg-primary' :
+ statusLevel === 'low' ? 'bg-amber-500' : statusLevel === 'unclassified' ? 'bg-slate-500' : 'bg-emerald-500';
 
  return (
  <div
  key={group}
  onClick={() => setSelectedType(selectedType === group ? 'ALL' : group)}
- className={`p-4 rounded-2xl cursor-pointer border transition-all duration-200 flex flex-col justify-between h-[145px] ${
+ className={`min-h-[172px] p-4 rounded-2xl cursor-pointer border transition-all duration-200 flex flex-col justify-between ${
  isSelected
  ? 'bg-slate-800 border-slate-700 ring-1 ring-slate-600 '
  : 'bg-slate-900/80 border-slate-800 hover:border-slate-700 hover:bg-slate-800/40'
@@ -294,7 +329,7 @@ export const BloodInventoryMatrix: React.FC<BloodInventoryMatrixProps> = ({ onOp
  
  {/* Minimal Status Dot */}
  <div className="flex items-center gap-1.5">
- <span className={`w-2 h-2 rounded-full ${barBgColor} ${statusLevel !== 'stable' ? 'animate-pulse' : ''}`} />
+ <span className={`w-2 h-2 rounded-full ${barBgColor} ${statusLevel && statusLevel !== 'stable' ? 'animate-pulse' : ''}`} />
  <span className={`text-[9px] font-bold uppercase tracking-wider ${statusColor}`}>
  {statusLabel}
  </span>
@@ -311,7 +346,7 @@ export const BloodInventoryMatrix: React.FC<BloodInventoryMatrixProps> = ({ onOp
  </div>
  </div>
 
- {/* Bottom Row: Simple Level Bar & Breakdown */}
+ {/* Bottom Row: Policy progress where a policy exists */}
  <div className="space-y-2">
  <div className="w-full bg-slate-950 rounded-full h-1 overflow-hidden">
  <div 
@@ -320,10 +355,11 @@ export const BloodInventoryMatrix: React.FC<BloodInventoryMatrixProps> = ({ onOp
  />
  </div>
 
- <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono pt-1.5 border-t border-slate-800/60">
- <span>PRBC: <strong className="text-slate-200">{formatNumber(prbcUnitsCount)}</strong></span>
- <span>WB: <strong className="text-slate-200">{formatNumber(wbUnitsCount)}</strong></span>
- </div>
+ <p className="border-t border-slate-800/60 pt-1.5 text-[10px] leading-snug text-slate-400">
+ {hasPolicyThreshold
+ ? `${formatNumber(policyCount)} ${selectedComponent === 'ALL' ? 'Whole Blood + PRBC' : getComponentLabel(selectedComponent)} units determine this status.`
+ : `${formatNumber(count)} ${getComponentLabel(selectedComponent)} units available. No policy threshold applies.`}
+ </p>
  </div>
  </div>
  );
@@ -483,6 +519,7 @@ export const BloodInventoryMatrix: React.FC<BloodInventoryMatrixProps> = ({ onOp
  <span className="ml-1 text-[9px]">{sortColumn === 'volume' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}</span>
  </div>
  </th>
+ <th className="py-3 px-4">Expiration Date</th>
  <th 
  onClick={() => handleSort('status')}
  className="py-3 px-4 cursor-pointer hover:bg-slate-900 hover:text-white select-none transition-colors"
@@ -498,7 +535,7 @@ export const BloodInventoryMatrix: React.FC<BloodInventoryMatrixProps> = ({ onOp
  <tbody className="divide-y divide-slate-800/60 text-slate-200 font-medium">
  {paginatedUnits.length === 0 ? (
  <tr>
- <td colSpan={8} className="p-0">
+ <td colSpan={9} className="p-0">
  <Empty><EmptyHeader><EmptyMedia variant="icon"><Droplet /></EmptyMedia><EmptyTitle>No inventory units found</EmptyTitle><EmptyDescription>Process uploaded collection units or adjust the active filters.</EmptyDescription></EmptyHeader></Empty>
  </td>
  </tr>
@@ -549,6 +586,11 @@ export const BloodInventoryMatrix: React.FC<BloodInventoryMatrixProps> = ({ onOp
 
  <td className="py-3 px-4 font-mono font-semibold text-slate-200">
  {formatNumber(unit.volumeMl)} mL
+ </td>
+
+ <td className="py-3 px-4 whitespace-nowrap">
+ <p className="font-mono text-xs text-slate-300">{formatExpiryDate(unit.expiryDate)}</p>
+ <p className="mt-1 text-[10px] text-slate-500">{getExpiryLabel(unit.expiryDate)}</p>
  </td>
 
  <td className="py-3 px-4">

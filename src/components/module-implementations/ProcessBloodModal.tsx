@@ -301,7 +301,7 @@ export const ProcessBloodModal: React.FC<ProcessBloodModalProps> = ({
  </div>
 
  <div>
- <label className="block text-slate-400 mb-1 font-medium">Calculated Component Expiry Date</label>
+ <label className="block text-slate-400 mb-1 font-medium">Calculated Expiry Date</label>
  <Input
  type="date"
  value={expiryDate}
@@ -309,7 +309,7 @@ export const ProcessBloodModal: React.FC<ProcessBloodModalProps> = ({
  aria-describedby="expiry-date-help"
  className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white font-mono"
  />
- <p id="expiry-date-help" className="mt-1 text-xs text-slate-500">Set automatically when the test result is submitted, using the collection date and selected component.</p>
+ <p id="expiry-date-help" className="mt-1 text-xs text-slate-500">Calculated only for CPDA-1 policy: PRBC is 35 days and Platelet Concentrate is 5 days, counting the next day as Day 1.</p>
  </div>
  </div>
  </div>

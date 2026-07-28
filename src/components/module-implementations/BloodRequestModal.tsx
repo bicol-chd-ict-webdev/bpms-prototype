@@ -5,7 +5,6 @@ import { X, Droplet, Send, Plus, Trash2, ShoppingCart } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useBloodData } from '../../context/BloodDataContext';
 import { FullBloodType, BloodComponentType, RequisitionItem } from '../../types/blood';
-import { getBloodComponentStockLevel } from '../../lib/bloodStockLevel';
 
 interface BloodRequestModalProps {
  isOpen: boolean;
@@ -58,12 +57,6 @@ export const BloodRequestModal: React.FC<BloodRequestModalProps> = ({
  u.testingStatus.overall === 'Passed'
  ).length;
 
- const getCenterComponentStockLevel = (bloodType: FullBloodType, component: BloodComponentType) => getBloodComponentStockLevel(
- bloodType,
- component,
- getCenterStock(bloodType, component),
- );
-
  const selectedStock = selectedProduct
  ? getCenterStock(selectedProduct.bloodType, selectedProduct.component)
  : 0;
@@ -73,9 +66,7 @@ export const BloodRequestModal: React.FC<BloodRequestModalProps> = ({
  item.component === selectedProduct.component
  )?.quantity || 0
  : 0;
- const requestableCount = selectedProduct && getCenterComponentStockLevel(selectedProduct.bloodType, selectedProduct.component) === 'critical'
- ? 0
- : Math.max(selectedStock - queuedQuantity, 0);
+ const requestableCount = Math.max(selectedStock - queuedQuantity, 0);
 
  useEffect(() => {
  if (!selectedProduct) return;
@@ -86,13 +77,13 @@ export const BloodRequestModal: React.FC<BloodRequestModalProps> = ({
  if (!isOpen) return null;
 
  const handleSelectProduct = (bloodType: FullBloodType, component: BloodComponentType, stock: number) => {
- if (stock === 0 || getCenterComponentStockLevel(bloodType, component) === 'critical') return;
+ if (stock === 0) return;
 
  setSelectedProduct({ bloodType, component });
  };
 
  const handleAddItem = () => {
- if (!selectedProduct || getCenterComponentStockLevel(selectedProduct.bloodType, selectedProduct.component) === 'critical' || quantity <= 0 || quantity > requestableCount) return;
+ if (!selectedProduct || quantity <= 0 || quantity > requestableCount) return;
 
  const { bloodType, component } = selectedProduct;
  const existingIndex = items.findIndex(item => item.bloodType === bloodType && item.component === component);
@@ -150,26 +141,11 @@ export const BloodRequestModal: React.FC<BloodRequestModalProps> = ({
  let border = 'border-slate-800/40';
  let tone = 'stock-cell-empty';
 
- if (count > 20) {
- bg = 'bg-emerald-950/60';
- text = 'text-emerald-400';
- border = 'border-emerald-900/40';
- tone = 'stock-cell-high';
- } else if (count > 10) {
- bg = 'bg-emerald-950/30';
- text = 'text-emerald-400';
- border = 'border-emerald-900/30';
- tone = 'stock-cell-medium';
- } else if (count > 5) {
- bg = 'bg-amber-950/40';
- text = 'text-amber-400';
- border = 'border-amber-900/30';
- tone = 'stock-cell-low';
- } else if (count > 0) {
- bg = 'bg-orange-950/40';
- text = 'text-orange-400';
- border = 'border-orange-900/30';
- tone = 'stock-cell-critical';
+ if (count > 0) {
+ bg = 'bg-slate-800';
+ text = 'text-slate-100';
+ border = 'border-slate-700';
+ tone = 'stock-cell-available';
  }
 
  if (isSelected) {
@@ -250,7 +226,6 @@ export const BloodRequestModal: React.FC<BloodRequestModalProps> = ({
  </td>
  {COMPONENTS.map(c => {
  const count = getCenterStock(g, c);
- const isCritical = getCenterComponentStockLevel(g, c) === 'critical';
  const queuedForCell = items.find(item => item.bloodType === g && item.component === c)?.quantity || 0;
  const isQueued = queuedForCell > 0;
  const isFullyQueued = queuedForCell >= count;
@@ -259,11 +234,9 @@ export const BloodRequestModal: React.FC<BloodRequestModalProps> = ({
  <Button variant="ghost" size="none"
  type="button"
  onClick={() => handleSelectProduct(g, c, count)}
- disabled={isCritical || count === 0 || isFullyQueued}
- className={`w-full py-2.5 px-1 rounded-lg border text-center font-mono font-bold text-xs transition-all ${count > 0 && !isFullyQueued && !isCritical ? 'cursor-pointer hover:-translate-y-0.5 hover:shadow-sm active:translate-y-0 active:scale-[0.98]' : 'cursor-not-allowed opacity-60'} ${isCritical ? 'stock-matrix-cell stock-cell-restricted border-primary/50 bg-primary/40 text-primary' : getCellStyle(count, isQueued)} ${isQueued ? 'ring-2 ring-primary/40' : ''}`}
- title={isCritical
- ? `${g} is at a critical level and cannot be requested.`
- : isFullyQueued
+ disabled={count === 0 || isFullyQueued}
+ className={`w-full py-2.5 px-1 rounded-lg border text-center font-mono font-bold text-xs transition-all ${count > 0 && !isFullyQueued ? 'cursor-pointer hover:-translate-y-0.5 hover:shadow-sm active:translate-y-0 active:scale-[0.98]' : 'cursor-not-allowed opacity-60'} ${getCellStyle(count, isQueued)} ${isQueued ? 'ring-2 ring-primary/40' : ''}`}
+ title={isFullyQueued
  ? `${g} ${COMPONENT_SHORT[c]}: all ${count} available units are already in the batch queue.`
  : count > 0
  ? `${g} ${COMPONENT_SHORT[c]}: ${count} units available. Select to add to the batch queue.`
@@ -281,7 +254,10 @@ export const BloodRequestModal: React.FC<BloodRequestModalProps> = ({
  </div>
 
  {/* Legend */}
- <div className="flex items-center gap-4 pt-2 border-t border-slate-900">
+ <p className="border-t border-slate-900 pt-2 text-[9px] text-slate-500">
+ Available units are shown without a stock threshold for the selected component.
+ </p>
+ <div className="hidden">
  <span className="text-[9px] text-slate-500 uppercase tracking-wider font-bold">Legend:</span>
  <div className="flex items-center gap-1">
  <div className="stock-cell-high w-3 h-3 rounded bg-emerald-950/60 border border-emerald-900/40"></div>
