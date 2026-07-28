@@ -1,0 +1,6 @@
+{
+  "name": "Blood Product Management System",
+  "description": "A comprehensive system for tracking, managing, and requesting blood products across blood centers, blood banks, and service facilities.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
