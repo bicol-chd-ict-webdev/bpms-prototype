@@ -40,7 +40,7 @@ export const NewRequisitionModal: React.FC<NewRequisitionModalProps> = ({
  const [targetFacility, setTargetFacility] = useState('BICOL REGIONAL HOSPITAL AND MEDICAL CENTER');
  const [notes, setNotes] = useState('Require immediate cross-match clearance.');
 
- if (!isOpen) return null;
+ if (!isOpen || user?.role === 'blood_center') return null;
 
  // Check available count matching requested
  const availableCount = bloodUnits.filter(u => 
@@ -51,11 +51,12 @@ export const NewRequisitionModal: React.FC<NewRequisitionModalProps> = ({
 
  const handleSubmit = (e: React.FormEvent) => {
  e.preventDefault();
+ if (!user || user.role === 'blood_center') return;
 
  if (addRequisition({
  requestingFacilityId: user?.facilityCode || 'BSF-SUNRISE-12',
  requestingFacilityName: user?.facilityName || 'ESTEVEZ MEMORIAL HOSPITAL INC.',
- requestingFacilityType: user?.role === 'blood_bank' ? 'blood_bank' : 'blood_service_facility',
+ requestingFacilityType: user.role,
  targetFacilityId: 'BB-STJUDE-04',
  targetFacilityName: targetFacility,
  patientId: patientId,

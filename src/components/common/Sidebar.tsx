@@ -24,6 +24,7 @@ import {
  Moon,
  Monitor,
  Sun,
+ CircleDollarSign,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useBloodData } from '../../context/BloodDataContext';
@@ -101,6 +102,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
  { id: 'collections', label: 'Blood Collections', icon: FileSpreadsheet },
  { id: 'inventory', label: 'Blood Inventory', icon: Droplets },
  { id: 'blood_requests', label: 'Blood Requests', icon: ClipboardList, badge: pendingReqsCount > 0 ? `${pendingReqsCount}` : undefined, badgeBg: 'bg-amber-600' },
+ { id: 'pricing', label: 'Component Pricing', icon: CircleDollarSign },
  ];
 
  case 'blood_bank':
@@ -108,6 +110,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
  { id: 'inventory', label: 'Inventory', icon: Droplets, badge: criticalStockCount <= 2 ? 'Low O-' : undefined, badgeBg: 'bg-primary' },
  { id: 'blood_requests', label: 'Blood Request', icon: ClipboardList, badge: pendingReqsCount > 0 ? `${pendingReqsCount}` : undefined, badgeBg: 'bg-amber-600' },
+ { id: 'pricing', label: 'Component Pricing', icon: CircleDollarSign },
  ];
 
  case 'blood_service_facility':
@@ -115,6 +118,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
  { id: 'dashboard', label: 'Facility Dashboard', icon: LayoutDashboard },
  { id: 'inventory', label: 'Facility Inventory', icon: Droplets },
  { id: 'blood_requests', label: 'Blood Requests', icon: ClipboardList, badge: pendingReqsCount > 0 ? `${pendingReqsCount}` : undefined, badgeBg: 'bg-amber-600' },
+ { id: 'pricing', label: 'Component Pricing', icon: CircleDollarSign },
  ];
 
  default:

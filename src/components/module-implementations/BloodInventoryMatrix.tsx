@@ -33,6 +33,7 @@ import { InputGroup, InputGroupAddon, InputGroupInput } from '../ui/input-group'
 import { Button } from '../ui/button';
 import { ReturnBloodUnitDialog } from '../modules/ReturnBloodUnitDialog';
 import { BatchReturnBloodUnitsDialog } from '../modules/BatchReturnBloodUnitsDialog';
+import { ReturnedUnitReviewPanel } from '../modules/ReturnedUnitReviewPanel';
 import { getPaginationTokens } from '../../lib/pagination';
 
 interface BloodInventoryMatrixProps {
@@ -156,6 +157,8 @@ export const BloodInventoryMatrix: React.FC<BloodInventoryMatrixProps> = ({ onOp
  </div>
  )}
  </div>
+
+ <ReturnedUnitReviewPanel />
 
  {/* Primary Tested Inventory Key Stats */}
  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

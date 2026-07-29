@@ -19,6 +19,7 @@ export type UnitStatus =
   | 'Uncrossmatched'
   | 'Reserved' 
   | 'In Transit' 
+  | 'Return Pending Review'
   | 'Transfused' 
   | 'Expired' 
   | 'Discarded';
@@ -44,6 +45,15 @@ export interface UserProfile {
   contactNumber: string;
   licenseNumber: string;
   avatarUrl?: string;
+}
+
+export type FacilityComponentPrices = Record<BloodComponentType, number | null>;
+
+export interface FacilityPricingConfiguration {
+  facilityId: string;
+  facilityName: string;
+  prices: FacilityComponentPrices;
+  updatedAt: string;
 }
 
 export interface BloodUnit {
@@ -81,7 +91,12 @@ export interface BloodUnit {
     returnedAt: string;
     returningFacilityId: string;
     returningFacilityName: string;
+    returningFacilityRole: UserRole;
     reason: string;
+    reviewStatus: 'Pending' | 'Approved' | 'Rejected as Wastage';
+    reviewedAt?: string;
+    reviewedByFacilityId?: string;
+    reviewedByFacilityName?: string;
   };
   notes?: string;
 }

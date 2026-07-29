@@ -61,7 +61,7 @@ export const NearlyExpiringUnitsPanel: React.FC<NearlyExpiringUnitsPanelProps> =
  && !['Expired', 'Discarded', 'Transfused'].includes(unit.status)
  )
  .sort((left, right) => left.expiryDate.localeCompare(right.expiryDate) || left.id.localeCompare(right.id)), [facilityId, units]);
- const previewUnits = nearlyExpiringUnits.slice(0, 3);
+ const previewUnits = nearlyExpiringUnits.slice(0, 5);
 
  const handleSelectUnit = (unit: BloodUnit) => {
  setShowAllUnits(false);

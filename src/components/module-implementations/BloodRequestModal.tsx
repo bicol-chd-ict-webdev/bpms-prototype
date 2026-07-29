@@ -39,6 +39,7 @@ export const BloodRequestModal: React.FC<BloodRequestModalProps> = ({
 }) => {
  const { user } = useAuth();
  const { addRequisition, bloodUnits } = useBloodData();
+ const requesterRole = user?.role;
 
  const [items, setItems] = useState<TempRequestItem[]>([]);
  const [selectedProduct, setSelectedProduct] = useState<{
@@ -74,7 +75,7 @@ export const BloodRequestModal: React.FC<BloodRequestModalProps> = ({
  setQuantity(requestableCount > 0 ? 1 : 0);
  }, [selectedProduct, requestableCount]);
 
- if (!isOpen) return null;
+ if (!isOpen || !requesterRole || requesterRole === 'blood_center') return null;
 
  const handleSelectProduct = (bloodType: FullBloodType, component: BloodComponentType, stock: number) => {
  if (stock === 0) return;
@@ -120,7 +121,7 @@ export const BloodRequestModal: React.FC<BloodRequestModalProps> = ({
  if (addRequisition({
  requestingFacilityId: user?.facilityCode || 'BB-STJUDE-04',
  requestingFacilityName: user?.facilityName || 'BICOL REGIONAL HOSPITAL AND MEDICAL CENTER',
- requestingFacilityType: 'blood_bank',
+ requestingFacilityType: requesterRole,
  targetFacilityId: 'NBC-METRO-01',
  targetFacilityName: 'BICOL SOUTH LUZON SUBNATIONAL REFERENCE LABORATORY',
  targetFacilityType: 'blood_center',

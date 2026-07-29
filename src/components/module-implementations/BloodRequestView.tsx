@@ -9,13 +9,15 @@ import {
  Truck, 
  CheckCircle2, 
  Clock, 
- ArrowUpDown
+ ArrowUpDown,
+ Ban,
 } from 'lucide-react';
 import { useBloodData } from '../../context/BloodDataContext';
 import { useAuth } from '../../context/AuthContext';
 import { formatNumber, getStatusBadge, getBloodGroupBadgeColor } from '../../lib/utils';
 import { getPaginationTokens } from '../../lib/pagination';
 import { ConfirmBloodReceiptAlertDialog } from '../modules/ConfirmBloodReceiptAlertDialog';
+import { CancelRequisitionAlertDialog } from '../modules/CancelRequisitionAlertDialog';
 
 interface BloodRequestViewProps {
  onRequestBlood: () => void;
@@ -26,7 +28,7 @@ type SortField = 'id' | 'status' | 'requestedAt';
 type SortOrder = 'asc' | 'desc';
 
 export const BloodRequestView: React.FC<BloodRequestViewProps> = ({ onRequestBlood, incomingRequisitionsPanel }) => {
- const { requisitions, receiveBloodRequest } = useBloodData();
+ const { requisitions, receiveBloodRequest, cancelRequisition } = useBloodData();
  const { user } = useAuth();
 
  // Only show replenishment requests submitted by the logged-in blood bank.
@@ -46,8 +48,10 @@ export const BloodRequestView: React.FC<BloodRequestViewProps> = ({ onRequestBlo
  const [currentPage, setCurrentPage] = useState(1);
  const [itemsPerPage, setItemsPerPage] = useState(10);
  const [receiptRequisitionId, setReceiptRequisitionId] = useState<string | null>(null);
+ const [cancellationRequisitionId, setCancellationRequisitionId] = useState<string | null>(null);
 
  const receiptRequisition = bankRequests.find(request => request.id === receiptRequisitionId) ?? null;
+ const cancellationRequisition = bankRequests.find(request => request.id === cancellationRequisitionId) ?? null;
 
  const handleSort = (field: SortField) => {
  if (sortField === field) {
@@ -252,6 +256,14 @@ export const BloodRequestView: React.FC<BloodRequestViewProps> = ({ onRequestBlo
  <CheckCircle2 className="w-3 h-3" />
  <span>Confirm Receipt</span>
  </Button>
+ ) : ['Pending Approval', 'Cross-Matching', 'Approved & Allocated'].includes(req.status) ? (
+ <Button variant="ghost" size="none"
+ onClick={() => setCancellationRequisitionId(req.id)}
+ className="ml-auto flex items-center gap-1 rounded-lg border border-rose-900/70 bg-rose-950/30 px-3 py-1 text-[10px] font-bold text-rose-300 transition-colors hover:bg-rose-900/60"
+ >
+ <Ban className="size-3" />
+ <span>Cancel Request</span>
+ </Button>
  ) : (
  <span className="text-[10px] text-slate-500 italic">No actions</span>
  )}
@@ -285,6 +297,14 @@ export const BloodRequestView: React.FC<BloodRequestViewProps> = ({ onRequestBlo
  open={Boolean(receiptRequisition)}
  onOpenChange={open => { if (!open) setReceiptRequisitionId(null); }}
  onConfirm={requisitionId => { receiveBloodRequest(requisitionId); setReceiptRequisitionId(null); }}
+ />
+ <CancelRequisitionAlertDialog
+ requisition={cancellationRequisition}
+ open={Boolean(cancellationRequisition)}
+ onOpenChange={open => { if (!open) setCancellationRequisitionId(null); }}
+ onConfirm={requisitionId => {
+  if (user?.facilityCode && cancelRequisition(requisitionId, user.facilityCode)) setCancellationRequisitionId(null);
+ }}
  />
  </>
  );

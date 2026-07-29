@@ -23,7 +23,6 @@ import {
  Clock,
  ArrowUpDown,
  X,
- PackageCheck,
  Send,
 } from 'lucide-react';
 import { useBloodData } from '../../context/BloodDataContext';
@@ -96,8 +95,6 @@ export const BloodCenterDashboard: React.FC<BloodCenterDashboardProps> = ({ acti
  const centerInventory = useMemo(() => bloodUnits.filter(unit => unit.currentLocation.facilityId === user?.facilityCode), [bloodUnits, user?.facilityCode]);
  const processingQueue = useMemo(() => centerInventory.filter(unit => unit.status === 'Quarantine' || unit.status === 'Testing' || unit.testingStatus.overall === 'Testing In Progress'), [centerInventory]);
  const dispatchReadyUnits = useMemo(() => centerClearedUnits.filter(unit => unit.status === 'Available'), [centerClearedUnits]);
- const reservedForDispatch = useMemo(() => centerClearedUnits.filter(unit => unit.status === 'Reserved').length, [centerClearedUnits]);
- const inTransitUnits = useMemo(() => centerClearedUnits.filter(unit => unit.status === 'In Transit').length, [centerClearedUnits]);
  const centerNetworkRequests = useMemo(() => requisitions.filter(request => request.targetFacilityId === user?.facilityCode), [requisitions, user?.facilityCode]);
  const fulfillmentQueue = useMemo(() => centerNetworkRequests
  .filter(request => ['Pending Approval', 'Cross-Matching', 'Approved & Allocated'].includes(request.status))
@@ -113,12 +110,6 @@ export const BloodCenterDashboard: React.FC<BloodCenterDashboardProps> = ({ acti
  .reduce((itemTotal, item) => itemTotal + (item.quantityProvided || 0), 0), 0);
  return { component: getComponentLabel(component), pending, allocated };
  }), [centerNetworkRequests]);
- const dispatchableByComponent = useMemo(() => BLOOD_COMPONENTS.map(component => ({
- component: getComponentLabel(component),
- count: dispatchReadyUnits.filter(unit => unit.component === component).length,
- })), [dispatchReadyUnits]);
- const dispatchableStockPeak = Math.max(1, ...dispatchableByComponent.map(item => item.count));
-
  const handleCreateUnit = (e: React.FormEvent) => {
  e.preventDefault();
  const today = new Date().toISOString().split('T')[0];
@@ -499,6 +490,8 @@ export const BloodCenterDashboard: React.FC<BloodCenterDashboardProps> = ({ acti
  <RoleMetricCard label="Pending allocations" value={fulfillmentQueue.length} detail="Network requests needing action" icon={ClipboardList} tone={fulfillmentQueue.length > 0 ? 'attention' : 'positive'} status={fulfillmentQueue.length > 0 ? 'Review' : 'Clear'} />
  </div>
 
+ <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(20rem,0.72fr)]">
+ <div className="flex min-w-0 flex-col gap-6">
  <section className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900">
  <div className="flex flex-col gap-3 border-b border-slate-800 bg-slate-950/50 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
  <div>
@@ -522,7 +515,7 @@ export const BloodCenterDashboard: React.FC<BloodCenterDashboardProps> = ({ acti
  </div>
  </section>
 
- <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+ <div className="grid grid-cols-1 gap-6">
  <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
  <div className="flex items-start justify-between gap-3 border-b border-slate-800 pb-4">
  <div>
@@ -536,36 +529,10 @@ export const BloodCenterDashboard: React.FC<BloodCenterDashboardProps> = ({ acti
  </div>
  </section>
 
- <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
- <div className="flex items-start justify-between gap-3 border-b border-slate-800 pb-4">
- <div>
- <h3 className="text-sm font-bold text-white">Dispatch readiness</h3>
- <p className="mt-1 text-xs leading-relaxed text-slate-400">Current center stock posture for network fulfillment.</p>
  </div>
- <PackageCheck className="size-5 shrink-0 text-cyan-300" />
- </div>
- <div className="mt-4 grid gap-3">
- <div className="flex items-center justify-between rounded-xl border border-emerald-900/60 bg-emerald-950/20 px-3 py-3"><div><p className="text-xs font-bold text-slate-200">Available for allocation</p><p className="mt-1 text-[10px] text-slate-500">Cleared inventory ready for a request</p></div><span className="font-mono text-xl font-black text-emerald-400">{formatNumber(dispatchReadyUnits.length)}</span></div>
- <div className="flex items-center justify-between rounded-xl border border-amber-900/60 bg-amber-950/20 px-3 py-3"><div><p className="text-xs font-bold text-slate-200">Reserved for fulfillment</p><p className="mt-1 text-[10px] text-slate-500">Units committed to active requests</p></div><span className="font-mono text-xl font-black text-amber-300">{formatNumber(reservedForDispatch)}</span></div>
- <div className="flex items-center justify-between rounded-xl border border-cyan-900/60 bg-cyan-950/20 px-3 py-3"><div><p className="text-xs font-bold text-slate-200">In transit</p><p className="mt-1 text-[10px] text-slate-500">Units currently en route to facilities</p></div><span className="font-mono text-xl font-black text-cyan-300">{formatNumber(inTransitUnits)}</span></div>
- </div>
- </section>
  </div>
 
- <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-[0.85fr_1.15fr]">
  <NearlyExpiringUnitsPanel units={centerClearedUnits} facilityId={user?.facilityCode} onSelectUnit={setSelectedUnit} />
- <section className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900">
- <div className="flex items-start justify-between gap-3 border-b border-slate-800 bg-slate-950/50 px-5 py-4">
- <div>
- <h3 className="text-sm font-bold text-white">Allocation-ready products</h3>
- <p className="mt-1 text-xs leading-relaxed text-slate-400">Cleared, available stock by blood component for the next fulfillment decision.</p>
- </div>
- <PackageCheck className="size-5 shrink-0 text-emerald-400" />
- </div>
- <div className="grid gap-3 p-5 sm:grid-cols-2">
- {dispatchableByComponent.map(item => <div key={item.component} className="rounded-xl border border-slate-800 bg-slate-950 p-3.5"><div className="flex items-start justify-between gap-3"><p className="text-xs font-bold text-slate-200">{item.component}</p><span className="font-mono text-lg font-black text-emerald-400">{formatNumber(item.count)}</span></div><div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-800"><div className="h-full rounded-full bg-emerald-400" style={{ width: `${Math.max(4, (item.count / dispatchableStockPeak) * 100)}%` }} /></div><p className="mt-2 text-[10px] text-slate-500">Available for allocation</p></div>)}
- </div>
- </section>
  </div>
  </div>
  );

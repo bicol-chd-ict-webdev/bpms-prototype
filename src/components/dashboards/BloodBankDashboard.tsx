@@ -22,6 +22,7 @@ import { useAuth } from '../../context/AuthContext';
 import { BloodInventoryMatrix } from '../modules/BloodInventoryMatrix';
 import { NetworkInventoryView } from '../modules/NetworkInventoryView';
 import { BloodRequestView } from '../modules/BloodRequestView';
+import { FacilityBloodRequestModal } from '../modules/FacilityBloodRequestModal';
 import { FacilityRequisitionDispatchDialog } from '../modules/FacilityRequisitionDispatchDialog';
 import { IncomingRequisitionsPanel } from '../modules/IncomingRequisitionsPanel';
 import { UnitDetailModal } from '../common/UnitDetailModal';
@@ -149,7 +150,7 @@ export const BloodBankDashboard: React.FC<BloodBankDashboardProps> = ({ activeTa
  onOpenChange={open => { if (!open) setDispatchRequisitionId(null); }}
  onDispatch={dispatchIncomingRequest}
  />
- {showRequestModal && <BloodRequestModalInline onClose={() => setShowRequestModal(false)} />}
+ {showRequestModal && <FacilityBloodRequestModal isOpen={true} onClose={() => setShowRequestModal(false)} />}
  </div>
  );
  }
@@ -287,7 +288,7 @@ export const BloodBankDashboard: React.FC<BloodBankDashboardProps> = ({ activeTa
  </div>
 
  {/* Inline Request Modal */}
- {showRequestModal && <BloodRequestModalInline onClose={() => setShowRequestModal(false)} />}
+ {showRequestModal && <FacilityBloodRequestModal isOpen={true} onClose={() => setShowRequestModal(false)} />}
 
  {/* Unit Detail Modal */}
  <UnitDetailModal
@@ -297,19 +298,4 @@ export const BloodBankDashboard: React.FC<BloodBankDashboardProps> = ({ activeTa
 
  </div>
  );
-};
-
-// Inline wrapper to avoid circular import - imports the modal lazily
-const BloodRequestModalInline: React.FC<{ onClose: () => void }> = ({ onClose }) => {
- // Lazy import workaround: We import the BloodRequestModal component
- const [BloodRequestModal, setModal] = React.useState<React.FC<{ isOpen: boolean; onClose: () => void }> | null>(null);
- 
- React.useEffect(() => {
- import('../modules/BloodRequestModal').then(mod => {
- setModal(() => mod.BloodRequestModal);
- });
- }, []);
-
- if (!BloodRequestModal) return null;
- return <BloodRequestModal isOpen={true} onClose={onClose} />;
 };

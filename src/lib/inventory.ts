@@ -24,6 +24,6 @@ export const getReactiveMarkers = (unit: BloodUnit) => {
 
 export const getInventoryStatusOptions = (role: UserRole): UnitStatus[] => (
   role === 'blood_bank'
-    ? ['Available', 'Uncrossmatched', 'Crossmatched']
-    : ['Available', 'Reserved', 'In Transit', 'Transfused', 'Discarded', 'Expired']
+    ? ['Available', 'Uncrossmatched', 'Crossmatched', 'Return Pending Review']
+    : ['Available', 'Reserved', 'In Transit', 'Return Pending Review', 'Transfused', 'Discarded', 'Expired']
 );

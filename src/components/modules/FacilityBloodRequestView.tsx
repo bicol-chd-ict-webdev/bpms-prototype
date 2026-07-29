@@ -1,6 +1,6 @@
 import { Button } from '../ui/button';
 import React, { useMemo, useState } from 'react';
-import { CheckCircle2, ClipboardList, Clock, MapPin, Send, Truck } from 'lucide-react';
+import { Ban, CheckCircle2, ClipboardList, Clock, MapPin, Send, Truck } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useBloodData } from '../../context/BloodDataContext';
 import { formatNumber, getBloodGroupBadgeColor, getStatusBadge } from '../../lib/utils';
@@ -10,6 +10,7 @@ import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, Pagi
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { getPaginationTokens } from '../../lib/pagination';
 import { ConfirmBloodReceiptAlertDialog } from './ConfirmBloodReceiptAlertDialog';
+import { CancelRequisitionAlertDialog } from './CancelRequisitionAlertDialog';
 import { FacilityRequisitionDispatchDialog } from './FacilityRequisitionDispatchDialog';
 import { IncomingRequisitionsPanel } from './IncomingRequisitionsPanel';
 
@@ -19,16 +20,18 @@ interface FacilityBloodRequestViewProps {
 
 export const FacilityBloodRequestView: React.FC<FacilityBloodRequestViewProps> = ({ onRequestBlood }) => {
  const { user } = useAuth();
- const { requisitions, bloodUnits, receiveBloodRequest, updateRequisitionStatus } = useBloodData();
+ const { requisitions, bloodUnits, receiveBloodRequest, updateRequisitionStatus, cancelRequisition } = useBloodData();
  const [currentPage, setCurrentPage] = useState(1);
  const [rowsPerPage, setRowsPerPage] = useState(10);
  const [receiptRequisitionId, setReceiptRequisitionId] = useState<string | null>(null);
+ const [cancellationRequisitionId, setCancellationRequisitionId] = useState<string | null>(null);
  const [dispatchRequisitionId, setDispatchRequisitionId] = useState<string | null>(null);
  const requests = requisitions.filter(request => request.requestingFacilityId === user?.facilityCode);
  const incomingRequests = useMemo(() => requisitions
  .filter(request => request.targetFacilityId === user?.facilityCode)
  .sort((left, right) => right.requestedAt.localeCompare(left.requestedAt)), [requisitions, user?.facilityCode]);
  const receiptRequisition = requests.find(request => request.id === receiptRequisitionId) ?? null;
+ const cancellationRequisition = requests.find(request => request.id === cancellationRequisitionId) ?? null;
  const activeCount = requests.filter(request => ['Pending Approval', 'Cross-Matching', 'Approved & Allocated', 'In Transit'].includes(request.status)).length;
  const inTransitCount = requests.filter(request => request.status === 'In Transit').length;
  const completedCount = requests.filter(request => ['Received at Facility', 'Completed'].includes(request.status)).length;
@@ -159,7 +162,11 @@ export const FacilityBloodRequestView: React.FC<FacilityBloodRequestViewProps> =
  >
  <CheckCircle2 className="size-3.5" /> Accept into inventory
  </Button>
- ) : <span className="text-slate-600">—</span>}
+ ) : ['Pending Approval', 'Cross-Matching', 'Approved & Allocated'].includes(request.status) ? (
+ <Button variant="ghost" size="none" type="button" onClick={() => setCancellationRequisitionId(request.id)} className="inline-flex items-center gap-1.5 rounded-lg border border-rose-900/70 bg-rose-950/30 px-2.5 py-1.5 text-[10px] font-bold text-rose-300 transition-colors hover:bg-rose-900/60">
+ <Ban className="size-3.5" /> Cancel request
+ </Button>
+ ) : <span className="text-slate-600">No action</span>}
  </td>
  </tr>
  ))}
@@ -224,6 +231,14 @@ export const FacilityBloodRequestView: React.FC<FacilityBloodRequestViewProps> =
  open={Boolean(receiptRequisition)}
  onOpenChange={open => { if (!open) setReceiptRequisitionId(null); }}
  onConfirm={requisitionId => { receiveBloodRequest(requisitionId); setReceiptRequisitionId(null); }}
+ />
+ <CancelRequisitionAlertDialog
+ requisition={cancellationRequisition}
+ open={Boolean(cancellationRequisition)}
+ onOpenChange={open => { if (!open) setCancellationRequisitionId(null); }}
+ onConfirm={requisitionId => {
+  if (user?.facilityCode && cancelRequisition(requisitionId, user.facilityCode)) setCancellationRequisitionId(null);
+ }}
  />
  <FacilityRequisitionDispatchDialog
  request={dispatchRequisition}

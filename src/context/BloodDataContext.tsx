@@ -8,7 +8,9 @@ import {
  RequisitionStatus,
  UnitStatus,
  FullBloodType,
- BloodComponentType
+ BloodComponentType,
+ FacilityComponentPrices,
+ FacilityPricingConfiguration
 } from '../types/blood';
 import { 
  INITIAL_BLOOD_UNITS, 
@@ -20,6 +22,7 @@ import {
 import { prioritizeUnitsForRelease } from '../lib/bloodRelease';
 import { calculateExpiryFromCollectionDate } from '../lib/bloodExpiry';
 import { formatReturnReasons, hasValidReturnReasons, ReturnReason } from '../lib/bloodReturn';
+import { BLOOD_COMPONENTS } from '../lib/bloodCatalog';
 import { toast } from 'sonner';
 
 interface BloodDataContextType {
@@ -29,11 +32,16 @@ interface BloodDataContextType {
  donorDrives: DonorDrive[];
  transfusionLogs: TransfusionLog[];
  notifications: NotificationItem[];
+ facilityPricingConfigurations: Record<string, FacilityPricingConfiguration>;
  addRequisition: (req: Omit<RequisitionOrder, 'id' | 'requestedAt' | 'status'>) => boolean;
+ cancelRequisition: (id: string, requestingFacilityId: string) => boolean;
  updateRequisitionStatus: (id: string, status: RequisitionStatus, notes?: string, allocatedUnitIds?: string[], quantityProvided?: number, updatedItems?: { id: string; quantityProvided?: number; allocatedUnitIds: string[] }[]) => void;
  receiveBloodRequest: (reqId: string) => void;
  returnBloodUnit: (unitId: string, returningFacilityId: string, returningFacilityName: string, reasons: ReturnReason[]) => boolean;
  returnBloodUnits: (unitIds: string[], returningFacilityId: string, returningFacilityName: string, reasons: ReturnReason[]) => boolean;
+ approveReturnedBloodUnit: (unitId: string, providerFacilityId: string, providerFacilityName: string) => boolean;
+ rejectReturnedBloodUnit: (unitId: string, providerFacilityId: string, providerFacilityName: string) => boolean;
+ saveFacilityComponentPrices: (facilityId: string, facilityName: string, prices: FacilityComponentPrices) => boolean;
  addBloodUnit: (unit: Omit<BloodUnit, 'id'>) => void;
  addBatchBloodUnits: (units: BloodUnit[]) => void;
  updateUnitStatus: (id: string, status: UnitStatus, locationNotes?: string, suppressToast?: boolean) => void;
@@ -60,6 +68,22 @@ interface BloodDataContextType {
 
 const BloodDataContext = createContext<BloodDataContextType | undefined>(undefined);
 
+const FACILITY_PRICING_STORAGE_KEY = 'blood-product-management:facility-component-pricing';
+
+const getStoredFacilityPricingConfigurations = (): Record<string, FacilityPricingConfiguration> => {
+ if (typeof window === 'undefined') return {};
+
+ try {
+  const saved = window.localStorage.getItem(FACILITY_PRICING_STORAGE_KEY);
+  return saved ? JSON.parse(saved) as Record<string, FacilityPricingConfiguration> : {};
+ } catch {
+  return {};
+ }
+};
+
+const normalizeComponentPrices = (prices: FacilityComponentPrices): FacilityComponentPrices =>
+ Object.fromEntries(BLOOD_COMPONENTS.map(component => [component, prices[component] ?? null])) as FacilityComponentPrices;
+
 export const BloodDataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
  const [bloodUnits, setBloodUnits] = useState<BloodUnit[]>(INITIAL_BLOOD_UNITS);
  const [networkInventoryLastUpdated, setNetworkInventoryLastUpdated] = useState(() => new Date().toISOString());
@@ -67,13 +91,58 @@ export const BloodDataProvider: React.FC<{ children: React.ReactNode }> = ({ chi
  const [donorDrives, setDonorDrives] = useState<DonorDrive[]>(INITIAL_DONOR_DRIVES);
  const [transfusionLogs, setTransfusionLogs] = useState<TransfusionLog[]>(INITIAL_TRANSFUSION_LOGS);
  const [notifications, setNotifications] = useState<NotificationItem[]>(INITIAL_NOTIFICATIONS);
+ const [facilityPricingConfigurations, setFacilityPricingConfigurations] = useState<Record<string, FacilityPricingConfiguration>>(getStoredFacilityPricingConfigurations);
 
  // Every inventory mutation updates the network view in the same shared data store.
  useEffect(() => {
  setNetworkInventoryLastUpdated(new Date().toISOString());
  }, [bloodUnits]);
 
+ useEffect(() => {
+  if (typeof window !== 'undefined') {
+   window.localStorage.setItem(FACILITY_PRICING_STORAGE_KEY, JSON.stringify(facilityPricingConfigurations));
+  }
+ }, [facilityPricingConfigurations]);
+
  const addRequisition = (reqData: Omit<RequisitionOrder, 'id' | 'requestedAt' | 'status'>) => {
+ if (String(reqData.requestingFacilityType) === 'blood_center') {
+  toast.error('Blood centers cannot request blood units', {
+   description: 'Blood requisitions can be submitted by blood banks and blood stations only.',
+  });
+  return false;
+ }
+
+ const requestedComponents = new Set(reqData.items.map(item => item.requiredComponent));
+ const pricingConfiguration = facilityPricingConfigurations[reqData.requestingFacilityId];
+ const unpricedComponents = [...requestedComponents].filter(component => {
+  const price = pricingConfiguration?.prices[component];
+  return price === null || price === undefined || !Number.isFinite(price) || price < 0;
+ });
+
+ if (unpricedComponents.length > 0) {
+  toast.error('Configure blood prices before requesting', {
+   description: `Set a valid price for ${unpricedComponents.join(', ')} in Component Pricing before submitting this request.`,
+  });
+  return false;
+ }
+
+ // A facility may have only one request awaiting a provider decision for each
+ // blood component, regardless of the blood type or the provider selected.
+ // Once a request is approved, cancelled, or rejected, a new request is allowed.
+ const pendingDecisionStatuses: RequisitionStatus[] = ['Pending Approval', 'Cross-Matching'];
+ const alreadyRequestedComponents = [...requestedComponents].filter(component => requisitions.some(request =>
+  request.requestingFacilityId === reqData.requestingFacilityId
+  && pendingDecisionStatuses.includes(request.status)
+  && request.items.some(item => item.requiredComponent === component)
+ ));
+
+ if (alreadyRequestedComponents.length > 0) {
+  toast.error('Duplicate blood component request', {
+   description: `A request for ${alreadyRequestedComponents.join(', ')} is still awaiting approval. Approve, reject, or cancel that request before submitting another one.`,
+  });
+  return false;
+ }
+
  const targetReportsInventory = bloodUnits.some(unit => unit.currentLocation.facilityId === reqData.targetFacilityId);
  // Select and reserve the exact units when a networked facility receives a
  // request. Reserved units are no longer counted as available by any facility.
@@ -141,6 +210,30 @@ export const BloodDataProvider: React.FC<{ children: React.ReactNode }> = ({ chi
  toast.success('Blood request submitted', {
  description: `${newReq.items.length} product type${newReq.items.length === 1 ? '' : 's'} added to requisition ${newReq.id}.`,
  });
+ return true;
+ };
+
+ // Only the submitting facility can withdraw a request, and never after dispatch.
+ // updateRequisitionStatus releases any units reserved for the cancelled order.
+ const cancelRequisition = (id: string, requestingFacilityId: string) => {
+ const currentRequest = requisitions.find(req => req.id === id);
+ const cancellableStatuses: RequisitionStatus[] = ['Pending Approval', 'Cross-Matching', 'Approved & Allocated'];
+
+ if (!currentRequest || currentRequest.requestingFacilityId !== requestingFacilityId) {
+ toast.error('Request could not be cancelled', {
+ description: 'Only the facility that submitted this request can cancel it.',
+ });
+ return false;
+ }
+
+ if (!cancellableStatuses.includes(currentRequest.status)) {
+ toast.error('Request could not be cancelled', {
+ description: 'Requests can only be cancelled before they are dispatched.',
+ });
+ return false;
+ }
+
+ updateRequisitionStatus(id, 'Cancelled', 'Cancelled by the requesting facility before dispatch.');
  return true;
  };
 
@@ -359,33 +452,30 @@ export const BloodDataProvider: React.FC<{ children: React.ReactNode }> = ({ chi
  const reason = formatReturnReasons(reasons);
  setBloodUnits(previous => previous.map(item => unitIds.includes(item.id) ? {
  ...item,
- status: 'Available',
- currentLocation: {
- facilityId: origin.facilityId,
- facilityName: origin.facilityName,
- role: origin.role,
- },
+ status: 'Return Pending Review',
  returnDetails: {
  returnedAt,
  returningFacilityId,
  returningFacilityName,
+ returningFacilityRole: item.currentLocation.role,
  reason: reason.trim(),
+ reviewStatus: 'Pending',
  },
- notes: `${item.notes ? `${item.notes} ` : ''}Returned to original source ${origin.facilityName} from ${returningFacilityName}. Reason: ${reason.trim()}`,
+ notes: `${item.notes ? `${item.notes} ` : ''}Return submitted to ${origin.facilityName} from ${returningFacilityName}; awaiting provider review. Reason: ${reason.trim()}`,
  } : item));
 
  setNotifications(previous => [{
  id: `NOTIF-${Date.now()}`,
- title: `${unitIds.length} Blood Unit${unitIds.length === 1 ? '' : 's'} Returned`,
- message: `${returningFacilityName} returned ${unitIds.length} unit${unitIds.length === 1 ? '' : 's'} to ${origin.facilityName}.`,
+ title: `${unitIds.length} Returned Blood Unit${unitIds.length === 1 ? '' : 's'} Await Review`,
+ message: `${returningFacilityName} submitted ${unitIds.length} unit${unitIds.length === 1 ? '' : 's'} for return review.`,
  timestamp: 'Just now',
  type: 'info',
  targetRole: origin.role,
  read: false,
  }, ...previous]);
 
- toast.success('Blood units returned', {
- description: `${unitIds.length} unit${unitIds.length === 1 ? '' : 's'} returned to ${origin.facilityName}.`,
+ toast.success('Return submitted for review', {
+ description: `${unitIds.length} unit${unitIds.length === 1 ? '' : 's'} await ${origin.facilityName}'s decision.`,
  });
 
  return true;
@@ -393,6 +483,97 @@ export const BloodDataProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
  const returnBloodUnit = (unitId: string, returningFacilityId: string, returningFacilityName: string, reasons: ReturnReason[]) =>
  returnBloodUnits([unitId], returningFacilityId, returningFacilityName, reasons);
+
+ const approveReturnedBloodUnit = (unitId: string, providerFacilityId: string, providerFacilityName: string) => {
+ const unit = bloodUnits.find(item => item.id === unitId);
+ const returnDetails = unit?.returnDetails;
+ if (!unit || !returnDetails || returnDetails.reviewStatus !== 'Pending' || unit.receivedFrom?.facilityId !== providerFacilityId) return false;
+
+ const reviewedAt = new Date().toISOString().replace('T', ' ').substring(0, 16);
+ setBloodUnits(previous => previous.map(item => item.id === unitId ? {
+ ...item,
+ status: 'Available',
+ currentLocation: {
+ facilityId: providerFacilityId,
+ facilityName: providerFacilityName,
+ role: item.receivedFrom?.role || item.currentLocation.role,
+ },
+ returnDetails: {
+ ...returnDetails,
+ reviewStatus: 'Approved',
+ reviewedAt,
+ reviewedByFacilityId: providerFacilityId,
+ reviewedByFacilityName: providerFacilityName,
+ },
+ notes: `${item.notes ? `${item.notes} ` : ''}Return approved by ${providerFacilityName}; unit restored to provider inventory.`,
+ } : item));
+
+ setNotifications(previous => [{
+ id: `NOTIF-${Date.now()}`,
+ title: 'Returned Blood Unit Approved',
+ message: `${providerFacilityName} approved the return of ${unitId}.`,
+ timestamp: 'Just now',
+ type: 'success',
+ targetRole: returnDetails.returningFacilityRole,
+ read: false,
+ }, ...previous]);
+ toast.success('Return approved', { description: `${unitId} was restored to provider inventory.` });
+ return true;
+ };
+
+ const rejectReturnedBloodUnit = (unitId: string, providerFacilityId: string, providerFacilityName: string) => {
+ const unit = bloodUnits.find(item => item.id === unitId);
+ const returnDetails = unit?.returnDetails;
+ if (!unit || !returnDetails || returnDetails.reviewStatus !== 'Pending' || unit.receivedFrom?.facilityId !== providerFacilityId) return false;
+
+ const reviewedAt = new Date().toISOString().replace('T', ' ').substring(0, 16);
+ setBloodUnits(previous => previous.map(item => item.id === unitId ? {
+ ...item,
+ status: 'Discarded',
+ returnDetails: {
+ ...returnDetails,
+ reviewStatus: 'Rejected as Wastage',
+ reviewedAt,
+ reviewedByFacilityId: providerFacilityId,
+ reviewedByFacilityName: providerFacilityName,
+ },
+ notes: `${item.notes ? `${item.notes} ` : ''}Return rejected by ${providerFacilityName}; recorded as wastage at ${returnDetails.returningFacilityName}.`,
+ } : item));
+
+ setNotifications(previous => [{
+ id: `NOTIF-${Date.now()}`,
+ title: 'Returned Blood Unit Rejected',
+ message: `${providerFacilityName} rejected the return of ${unitId}; it was recorded as wastage at ${returnDetails.returningFacilityName}.`,
+ timestamp: 'Just now',
+ type: 'warning',
+ targetRole: returnDetails.returningFacilityRole,
+ read: false,
+ }, ...previous]);
+ toast.success('Return rejected', { description: `${unitId} was recorded as wastage at the requester facility.` });
+ return true;
+ };
+
+ const saveFacilityComponentPrices = (facilityId: string, facilityName: string, prices: FacilityComponentPrices) => {
+  const normalizedPrices = normalizeComponentPrices(prices);
+  const hasInvalidPrice = Object.values(normalizedPrices).some(price => price !== null && (!Number.isFinite(price) || price < 0));
+
+  if (hasInvalidPrice) {
+   toast.error('Prices could not be saved', { description: 'Enter a valid non-negative amount for each configured component.' });
+   return false;
+  }
+
+  setFacilityPricingConfigurations(previous => ({
+   ...previous,
+   [facilityId]: {
+    facilityId,
+    facilityName,
+    prices: normalizedPrices,
+    updatedAt: new Date().toISOString(),
+   },
+  }));
+  toast.success('Component prices saved', { description: `Pricing configuration for ${facilityName} is up to date.` });
+  return true;
+ };
 
  const addBloodUnit = (unitData: Omit<BloodUnit, 'id'>) => {
  const newUnit: BloodUnit = {
@@ -669,11 +850,16 @@ export const BloodDataProvider: React.FC<{ children: React.ReactNode }> = ({ chi
  donorDrives,
  transfusionLogs,
  notifications,
+ facilityPricingConfigurations,
  addRequisition,
+ cancelRequisition,
  updateRequisitionStatus,
  receiveBloodRequest,
  returnBloodUnit,
  returnBloodUnits,
+ approveReturnedBloodUnit,
+ rejectReturnedBloodUnit,
+ saveFacilityComponentPrices,
  addBloodUnit,
  addBatchBloodUnits,
  updateUnitStatus,

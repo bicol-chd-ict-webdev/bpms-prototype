@@ -7,6 +7,7 @@ import { Sidebar } from './components/common/Sidebar';
 import { BloodCenterDashboard } from './components/dashboards/BloodCenterDashboard';
 import { BloodBankDashboard } from './components/dashboards/BloodBankDashboard';
 import { BloodServiceFacilityDashboard } from './components/dashboards/BloodServiceFacilityDashboard';
+import { FacilityPricingSettings } from './components/modules/FacilityPricingSettings';
 import { UnitDetailModal } from './components/common/UnitDetailModal';
 import { SidebarProvider, SidebarInset } from './components/ui/sidebar';
 import { Toaster } from './components/ui/sonner';
@@ -34,6 +35,9 @@ function MainApp() {
  {/* Main Dashboard Canvas Area wrapped in SidebarInset */}
  <SidebarInset>
  <div className="flex-1 p-4 sm:p-6 lg:p-8 min-w-0">
+ {activeTab === 'pricing' ? (
+ <FacilityPricingSettings />
+ ) : <>
  {currentRole === 'blood_center' && (
  <BloodCenterDashboard activeTab={activeTab} />
  )}
@@ -45,6 +49,7 @@ function MainApp() {
  {currentRole === 'blood_service_facility' && (
  <BloodServiceFacilityDashboard activeTab={activeTab} />
  )}
+ </>}
  </div>
  </SidebarInset>
 
