@@ -9,7 +9,7 @@ import {
   FullBloodType,
   UnitStatus
 } from '../types/blood';
-import { RHLN_FACILITIES } from './rhlnFacilityDirectory';
+import { getRhlnFacilityRole, normalizeRhlnFacilityName, RHLN_FACILITIES } from './rhlnFacilityDirectory';
 
 export const DEMO_USERS: UserProfile[] = [
   {
@@ -484,7 +484,7 @@ type InventorySeedLocation = BloodUnit['currentLocation'] & {
   statusCycle: UnitStatus[];
 };
 
-const DEFAULT_ACCOUNT_FACILITY_NAMES = new Set(DEMO_USERS.map(profile => profile.facilityName.trim().toUpperCase()));
+const DEFAULT_ACCOUNT_FACILITY_NAMES = new Set(DEMO_USERS.map(profile => normalizeRhlnFacilityName(profile.facilityName)));
 
 const INVENTORY_SEED_LOCATIONS: InventorySeedLocation[] = [
   {
@@ -509,11 +509,11 @@ const INVENTORY_SEED_LOCATIONS: InventorySeedLocation[] = [
     statusCycle: ['Available', 'Available', 'Uncrossmatched', 'Crossmatched'],
   },
   ...RHLN_FACILITIES
-    .filter(facility => !DEFAULT_ACCOUNT_FACILITY_NAMES.has(facility.name.trim().toUpperCase()))
+    .filter(facility => !DEFAULT_ACCOUNT_FACILITY_NAMES.has(normalizeRhlnFacilityName(facility.name)))
     .map(facility => ({
       facilityId: facility.id,
       facilityName: facility.name,
-      role: 'blood_service_facility' as const,
+      role: getRhlnFacilityRole(facility.category),
       // Five cleared units for every blood group and component, allowing the
       // directory facilities to satisfy a typical multi-unit demo request.
       count: 200,

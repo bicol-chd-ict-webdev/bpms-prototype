@@ -10,6 +10,11 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuLabel, DropdownMenuRadio
 import { InputGroup, InputGroupAddon, InputGroupInput } from '../../ui/input-group';
 import { BLOOD_GROUPS, COMPONENTS, PROVIDERS_PER_PAGE, productKey, Provider, providerBloodComponentStockLevel, providerCanReceiveRequest, providerCoordinatesLabel, providerDistanceLabel, providerLocationLabel, providerTypeLabel, RequestItem, ROLE_DETAILS } from './shared';
 
+const philippinePesoFormatter = new Intl.NumberFormat('en-PH', {
+ style: 'currency',
+ currency: 'PHP',
+});
+
 const RequestPathSelector: React.FC<{ onClose: () => void; onChooseFacility: () => void; onChooseProduct: () => void }> = ({ onClose, onChooseFacility, onChooseProduct }) => (
  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
  <div className="w-full max-w-2xl rounded-2xl border border-slate-700 bg-slate-900 text-slate-100 ">
@@ -229,9 +234,17 @@ const ProductFirstBatchSearch: React.FC<{ providers: Provider[]; onBack: () => v
 
 const ProductFirstConfirmationModal: React.FC<{ provider: Provider; items: RequestItem[]; onBack: () => void; onComplete: () => void }> = ({ provider, items, onBack, onComplete }) => {
  const { user } = useAuth();
- const { addRequisition } = useBloodData();
+ const { addRequisition, facilityPricingConfigurations } = useBloodData();
  const canFulfill = items.length > 0 && providerCanReceiveRequest(provider, items);
  const totalQuantity = items.reduce((total, item) => total + item.quantity, 0);
+ const requesterFacilityId = user?.facilityCode || 'BSF-SUNRISE-12';
+ const componentPrices = facilityPricingConfigurations[provider.id]?.prices;
+ const hasCompletePricing = items.every(item => {
+  const price = componentPrices?.[item.component];
+  return typeof price === 'number' && Number.isFinite(price) && price >= 0;
+ });
+ const totalAmount = items.reduce((total, item) => total + (componentPrices?.[item.component] ?? 0) * item.quantity, 0);
+ const formattedTotal = hasCompletePricing ? philippinePesoFormatter.format(totalAmount) : 'Price unavailable';
 
  const submitRequest = () => {
  if (!canFulfill) return;
@@ -239,7 +252,7 @@ const ProductFirstConfirmationModal: React.FC<{ provider: Provider; items: Reque
  if (!requesterRole || requesterRole === 'blood_center') return;
  const firstItem = items[0];
  if (addRequisition({
- requestingFacilityId: user?.facilityCode || 'BSF-SUNRISE-12',
+ requestingFacilityId: requesterFacilityId,
  requestingFacilityName: user?.facilityName || 'ESTEVEZ MEMORIAL HOSPITAL INC.',
  requestingFacilityType: requesterRole,
  targetFacilityId: provider.id,
@@ -268,10 +281,11 @@ const ProductFirstConfirmationModal: React.FC<{ provider: Provider; items: Reque
  <div className="w-full max-w-2xl overflow-hidden rounded-2xl border border-slate-700 bg-slate-900 text-slate-100 ">
  <div className="flex items-center justify-between border-b border-slate-800 bg-slate-950 px-6 py-4"><div className="flex items-center gap-2.5"><Button variant="ghost" size="none" type="button" onClick={onBack} aria-label="Back to matching facilities" className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-800 hover:text-white"><ArrowLeft className="size-4" /></Button><div className="flex size-9 items-center justify-center rounded-lg bg-emerald-600 text-white"><CheckCircle2 className="size-4" /></div><div><h3 className="text-base font-bold text-white">Confirm Product-First Request</h3><p className="text-xs text-slate-400">Review the complete batch against the selected facility’s available stock.</p></div></div><Button variant="ghost" size="none" type="button" onClick={onBack} aria-label="Close request confirmation" className="rounded-lg p-1 text-slate-400 transition-colors hover:bg-slate-800 hover:text-white"><X className="size-5" /></Button></div>
  <div className="p-6 text-xs"><div className="rounded-xl border border-cyan-900/60 bg-cyan-950/30 p-4"><div className="font-bold text-cyan-200">{provider.name}</div><div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 font-mono text-[11px] text-cyan-300"><span>{providerDistanceLabel(provider)}</span><span>{provider.eta}</span><span>{provider.inventoryReported ? `${provider.totalAvailableUnits} total available units` : 'Inventory not reported'}</span></div></div>
- <div className="mt-5 overflow-hidden rounded-xl border border-slate-800"><table className="w-full text-left"><thead className="bg-slate-950 font-mono text-[9px] uppercase text-slate-400"><tr><th className="px-3 py-2">Product</th><th className="px-3 py-2 text-center">Requested</th><th className="px-3 py-2 text-center">Available</th><th className="px-3 py-2 text-right">Result</th></tr></thead><tbody className="divide-y divide-slate-800">{items.map(item => { const stock = provider.inventoryByProduct[productKey(item.bloodType, item.component)] || 0; const sufficient = !provider.inventoryReported || stock >= item.quantity; return <tr key={`${item.bloodType}-${item.component}`}><td className="px-3 py-3"><span className="font-mono font-bold text-primary">{item.bloodType}</span><span className="mx-1.5 text-slate-600">·</span><span className="text-slate-300">{item.component.split('(')[0]}</span></td><td className="px-3 py-3 text-center font-mono font-bold text-white">{item.quantity}</td><td className="px-3 py-3 text-center font-mono font-bold text-slate-200">{provider.inventoryReported ? stock : 'Not reported'}</td><td className="px-3 py-3 text-right"><span className={sufficient ? 'font-semibold text-emerald-400' : 'font-semibold text-primary'}>{provider.inventoryReported ? (sufficient ? 'Available' : 'Insufficient') : 'Awaiting approval'}</span></td></tr>; })}</tbody></table></div>
+ <div className="mt-5 overflow-hidden rounded-xl border border-slate-800"><table className="w-full text-left"><thead className="bg-slate-950 font-mono text-[9px] uppercase text-slate-400"><tr><th className="px-3 py-2">Product</th><th className="px-3 py-2 text-center">Available</th><th className="px-3 py-2 text-center">Requested</th><th className="px-3 py-2 text-right" title="Price per unit">Price</th></tr></thead><tbody className="divide-y divide-slate-800">{items.map(item => { const stock = provider.inventoryByProduct[productKey(item.bloodType, item.component)] || 0; const price = componentPrices?.[item.component]; const hasPrice = typeof price === 'number' && Number.isFinite(price) && price >= 0; return <tr key={`${item.bloodType}-${item.component}`}><td className="px-3 py-3"><span className="font-mono font-bold text-primary">{item.bloodType}</span><span className="mx-1.5 text-slate-600">·</span><span className="text-slate-300">{item.component.split('(')[0]}</span></td><td className="px-3 py-3 text-center font-mono font-bold text-slate-200">{provider.inventoryReported ? stock : 'Not reported'}</td><td className="px-3 py-3 text-center font-mono font-bold text-white">{item.quantity}</td><td className="px-3 py-3 text-right font-mono font-bold text-slate-200">{hasPrice ? philippinePesoFormatter.format(price) : 'Not set'}</td></tr>; })}</tbody></table></div>
+ {!hasCompletePricing && <p className="mt-3 text-[11px] font-medium text-amber-300">The selected facility has not configured a price for one or more requested components.</p>}
  <p className="mt-4 text-[11px] text-slate-400">{provider.inventoryReported ? 'This confirmation is read-only. Use Back to adjust the request or choose another facility.' : 'This directory facility does not publish blood stock. Your request will remain pending until the facility confirms availability.'}</p>
  </div>
- <div className="flex items-center justify-between border-t border-slate-800 bg-slate-950 px-6 py-4"><span className="text-xs text-slate-400">{items.length} products · {totalQuantity} units</span><Button variant="ghost" size="none" type="button" onClick={submitRequest} disabled={!canFulfill} className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 font-bold text-white transition-colors hover:bg-primary disabled:cursor-not-allowed disabled:opacity-40"><Send className="size-4" /> Submit request</Button></div>
+ <div className="flex items-center justify-between border-t border-slate-800 bg-slate-950 px-6 py-4"><span className="text-xs text-slate-400">{items.length} products · {totalQuantity} units</span><Button variant="ghost" size="none" type="button" onClick={submitRequest} disabled={!canFulfill} aria-label={`Confirm request, total ${formattedTotal}`} className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 font-bold text-white transition-colors hover:bg-primary disabled:cursor-not-allowed disabled:opacity-40"><Send data-icon="inline-start" /> Confirm · {formattedTotal}</Button></div>
  </div>
  </div>
  );

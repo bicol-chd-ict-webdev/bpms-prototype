@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, Building2, CheckCircle2, ChevronRight, Droplet, HeartPulse, Landmark, MapPin, Plus, Search, Send, Settings, ShoppingCart, Trash2, Truck, X } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useBloodData } from '../../context/BloodDataContext';
-import { RHLN_FACILITY_DATA_SOURCE, RHLN_FACILITIES } from '../../data/rhlnFacilityDirectory';
+import { getRhlnFacilityRole, RHLN_FACILITY_DATA_SOURCE, RHLN_FACILITIES } from '../../data/rhlnFacilityDirectory';
 import { DEMO_USERS } from '../../data/mockData';
 import { BloodComponentType, FullBloodType, RequisitionItem, UserRole } from '../../types/blood';
 import { getBloodTypeStockLevel, isRedCellComponent } from '../../lib/bloodStockLevel';
@@ -51,7 +51,7 @@ export const FacilityBloodRequestModal: React.FC<FacilityBloodRequestModalProps>
  facilities.set(normalizedName, {
  id: facility.id,
  name: facility.name,
- role: 'blood_service_facility',
+ role: getRhlnFacilityRole(facility.category),
  inventoryReported: false,
  province: facility.province,
  address: facility.address,

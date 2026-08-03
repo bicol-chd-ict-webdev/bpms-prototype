@@ -1,6 +1,7 @@
 import React from 'react';
 import { Building2, HeartPulse, Landmark } from 'lucide-react';
 import { BloodComponentType, FullBloodType, UserRole } from '../../../types/blood';
+import { normalizeRhlnFacilityName } from '../../../data/rhlnFacilityTypes';
 import { getBloodTypeStockLevel, isRedCellComponent } from '../../../lib/bloodStockLevel';
 
 export type Provider = {
@@ -42,7 +43,7 @@ export const COMPONENTS: { label: string; value: BloodComponentType }[] = [
 ];
 export const PROVIDERS_PER_PAGE = 8;
 export const productKey = (bloodType: FullBloodType, component: BloodComponentType) => `${bloodType}:${component}`;
-export const normalizeFacilityName = (name: string) => name.toUpperCase().replace(/[^A-Z0-9]/g, '');
+export const normalizeFacilityName = normalizeRhlnFacilityName;
 
 export const calculateDistanceKm = (originLatitude: number, originLongitude: number, destinationLatitude: number, destinationLongitude: number) => {
  const toRadians = (value: number) => value * Math.PI / 180;

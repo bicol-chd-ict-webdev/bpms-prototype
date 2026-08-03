@@ -113,15 +113,15 @@ export const BloodDataProvider: React.FC<{ children: React.ReactNode }> = ({ chi
  }
 
  const requestedComponents = new Set(reqData.items.map(item => item.requiredComponent));
- const pricingConfiguration = facilityPricingConfigurations[reqData.requestingFacilityId];
+ const pricingConfiguration = facilityPricingConfigurations[reqData.targetFacilityId];
  const unpricedComponents = [...requestedComponents].filter(component => {
   const price = pricingConfiguration?.prices[component];
   return price === null || price === undefined || !Number.isFinite(price) || price < 0;
  });
 
  if (unpricedComponents.length > 0) {
-  toast.error('Configure blood prices before requesting', {
-   description: `Set a valid price for ${unpricedComponents.join(', ')} in Component Pricing before submitting this request.`,
+  toast.error('Requested facility pricing is incomplete', {
+   description: `${reqData.targetFacilityName} has not set a valid price for ${unpricedComponents.join(', ')}.`,
   });
   return false;
  }
